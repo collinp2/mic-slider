@@ -13,4 +13,4 @@ build/
 
 # Arduino
 firmware/*.hex
-firmware/config.h
+firmware/mic-slider/config.h
