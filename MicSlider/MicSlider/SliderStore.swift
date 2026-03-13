@@ -7,9 +7,9 @@ struct SliderConfig: Identifiable, Codable, Hashable {
     var id = UUID()
     var name: String
     var ipAddress: String
-    var port: Int = 80
+    var port: Int = 8080
     var cameraURL: String? = nil
-    var maxSteps: Int = 20000
+    var maxSteps: Int = 40000
 }
 
 // MARK: - SliderStore

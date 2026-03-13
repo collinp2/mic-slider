@@ -61,9 +61,9 @@ struct AddSliderSheet: View {
 
     @State private var name      = ""
     @State private var ip        = ""
-    @State private var port      = "80"
+    @State private var port      = "8080"
     @State private var cameraURL = ""
-    @State private var maxSteps  = "20000"
+    @State private var maxSteps  = "40000"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -71,7 +71,7 @@ struct AddSliderSheet: View {
 
             Form {
                 TextField("Name", text: $name, prompt: Text("Stage Left Mic"))
-                TextField("IP Address", text: $ip, prompt: Text("192.168.1.42"))
+                TextField("IP Address", text: $ip, prompt: Text("10.0.0.126"))
                 TextField("Port", text: $port)
                 TextField("Camera URL (optional)", text: $cameraURL, prompt: Text("http://192.168.1.50/stream"))
                 TextField("Max Steps", text: $maxSteps)
