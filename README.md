@@ -14,7 +14,7 @@ An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear l
 | TB6600 stepper driver (×2) | 4A, 9–42V; one per slider |
 | NEMA11 50mm linear slide (24V, 1.8°) | CNC lead-screw slide, T-shaped screw |
 | 24V 5A wall adapter (5.5mm × 2.5mm barrel jack) | AC 100–240V to DC 24V 5A; powers both sliders |
-| Limit switches (×2 per slider) | Wire NC between pin and GND |
+| HiLetgo KW12-3 roller lever microswitches (×10 pack) | SPDT, AC 250V 5A; 2 per slider, plenty of spares |
 | Dupont jumper wires | Arduino → TB6600 signal wiring |
 | Adafruit Motor Shield v2 | **Not used** — underpowered for 24V; TB6600 is wired direct to Arduino |
 
@@ -41,6 +41,8 @@ An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear l
 |---|---|
 | Left limit | Pin 6 (INPUT_PULLUP — wire switch between pin and GND) |
 | Right limit | Pin 7 (INPUT_PULLUP — wire switch between pin and GND) |
+
+Use the **COM** and **NC (normally closed)** terminals on each KW12-3. Leave NO unconnected.
 
 ### Power
 
@@ -193,6 +195,7 @@ Each Arduino gets a unique static IP in `config.h`. Add each one in the app side
 ## Roadmap
 
 - [x] Order 24V 5A power supply (24V 5A wall adapter, 5.5mm × 2.5mm — cut barrel jack, wire direct to TB6600)
+- [x] Order limit switches (HiLetgo KW12-3 roller lever, 10-pack)
 - [ ] Flash firmware, connect to WiFi, verify with `curl /status`
 - [ ] Wire TB6600 + limit switches, test homing
 - [ ] Calibrate `MAX_STEPS` against actual slide travel
