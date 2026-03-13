@@ -16,13 +16,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		C0000001 /* MicSlider.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MicSlider.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B0000001 /* MicSliderApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicSliderApp.swift; sourceTree = "<group>"; };
 		B0000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B0000003 /* SliderDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliderDetailView.swift; sourceTree = "<group>"; };
 		B0000004 /* SliderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliderStore.swift; sourceTree = "<group>"; };
 		B0000005 /* SliderClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SliderClient.swift; sourceTree = "<group>"; };
 		B0000006 /* CameraFeedView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraFeedView.swift; sourceTree = "<group>"; };
+		C0000001 /* MicSlider.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MicSlider.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -36,7 +36,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		E0000000 /* root */ = {
+		E0000000 = {
 			isa = PBXGroup;
 			children = (
 				E0000001 /* MicSlider */,
@@ -156,7 +156,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableDescription = "Control stepper-motor microphone sliders over WiFi";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -165,9 +165,9 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.collinpeterson.MicSlider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				SDKROOT = macosx;
 			};
 			name = Debug;
 		};
@@ -182,7 +182,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_LSApplicationCategoryType = "";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSHumanReadableDescription = "Control stepper-motor microphone sliders over WiFi";
 				INFOPLIST_KEY_NSMainStoryboardFile = "";
 				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
@@ -191,9 +191,9 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.collinpeterson.MicSlider;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				SDKROOT = macosx;
 			};
 			name = Release;
 		};
@@ -332,7 +332,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = F0000000 /* Project object */;
 }

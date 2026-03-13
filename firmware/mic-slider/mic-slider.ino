@@ -160,15 +160,30 @@ void handleSpeed(WiFiClient& client, const String& query) {
 // ── HTTP dispatcher ───────────────────────────────────────────────────────────
 
 void handleRequest(WiFiClient& client) {
-  String requestLine = client.readStringUntil('\n');
-  requestLine.trim();
+  // Read request character by character — required for reliable WiFiS3 operation.
+  // Collect the first line (request line), drain remaining headers until blank line.
+  String requestLine = "";
+  String currentLine = "";
+  bool firstLine = true;
+  unsigned long t = millis();
 
-  // Drain headers
-  while (client.available()) {
-    String line = client.readStringUntil('\n');
-    if (line == "\r" || line.isEmpty()) break;
+  while (client.connected() && millis() - t < 3000) {
+    if (client.available()) {
+      char c = client.read();
+      if (c == '\n') {
+        if (firstLine) {
+          requestLine = currentLine;
+          firstLine = false;
+        }
+        if (currentLine.length() == 0 || currentLine == "\r") break; // blank line = end of headers
+        currentLine = "";
+      } else if (c != '\r') {
+        currentLine += c;
+      }
+    }
   }
 
+  requestLine.trim();
   int firstSpace  = requestLine.indexOf(' ');
   int secondSpace = requestLine.lastIndexOf(' ');
   if (firstSpace == -1 || secondSpace == -1 || firstSpace == secondSpace) {
@@ -180,7 +195,7 @@ void handleRequest(WiFiClient& client) {
 
   if (method != "GET") { sendError(client, 405, "Method not allowed"); return; }
 
-  int qmark   = fullPath.indexOf('?');
+  int qmark    = fullPath.indexOf('?');
   String path  = (qmark == -1) ? fullPath : fullPath.substring(0, qmark);
   String query = (qmark == -1) ? ""       : fullPath.substring(qmark + 1);
 
@@ -205,9 +220,8 @@ void setup() {
   stepper.setMaxSpeed(DEFAULT_MAX_SPEED);
   stepper.setAcceleration(DEFAULT_ACCEL);
 
-  // Using DHCP — WiFi.config() has known reliability issues on WiFiS3.
-  // Read the actual IP from Serial Monitor after connecting, then set it
-  // as your router's DHCP reservation for a stable address.
+  // Force DHCP by zeroing out any cached static IP on the ESP32 coprocessor
+  WiFi.config(IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0));
   Serial.print("Connecting to ");
   Serial.println(WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
@@ -228,10 +242,11 @@ void loop() {
   // ── HTTP ──────────────────────────────────────────────────────────────────
   WiFiClient client = server.available();
   if (client) {
-    unsigned long t = millis();
-    while (!client.available() && millis() - t < 1000);
-    if (client.available()) handleRequest(client);
+    Serial.println("Client connected");
+    handleRequest(client);
+    Serial.println("Request handled");
     client.stop();
+    Serial.println("Client disconnected");
   }
 
   // ── Limit switch safety ───────────────────────────────────────────────────

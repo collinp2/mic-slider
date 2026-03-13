@@ -14,7 +14,7 @@
 #define SUBNET_MASK   IPAddress(255, 255, 255, 0)
 
 // HTTP server port
-#define HTTP_PORT     80
+#define HTTP_PORT     8080
 
 // ── Stepper motor pins (TB6600 driver) ────────────────────────────────────────
 // TB6600 wiring (single-ended mode):
