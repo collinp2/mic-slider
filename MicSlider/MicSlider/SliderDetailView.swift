@@ -194,6 +194,11 @@ struct SliderDetailView: View {
             do {
                 status = try await client.status()
                 errorMessage = nil
+                // If still moving, keep checking until it stops
+                if status?.moving == true {
+                    try await Task.sleep(nanoseconds: 1_000_000_000)
+                    fetchStatus()
+                }
             } catch {
                 status = nil
                 errorMessage = error.localizedDescription

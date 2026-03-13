@@ -241,13 +241,17 @@ void setup() {
 
 void loop() {
   // ── HTTP ──────────────────────────────────────────────────────────────────
-  WiFiClient client = server.available();
-  if (client) {
-    Serial.println("Client connected");
-    handleRequest(client);
-    Serial.println("Request handled");
-    client.stop();
-    Serial.println("Client disconnected");
+  // Throttle server.available() — it does SPI to ESP32-S3 and steals CPU from
+  // stepper.run(). Check at most every 50ms; stepper gets full time otherwise.
+  static unsigned long lastWiFiCheck = 0;
+  unsigned long now = millis();
+  if (now - lastWiFiCheck >= 50) {
+    lastWiFiCheck = now;
+    WiFiClient client = server.available();
+    if (client) {
+      handleRequest(client);
+      client.stop();
+    }
   }
 
   // ── Limit switch safety ───────────────────────────────────────────────────
