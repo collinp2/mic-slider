@@ -200,7 +200,7 @@ Each Arduino gets a unique static IP in `config.h`. Add each one in the app side
 - [x] Order limit switches (HiLetgo KW12-3 roller lever, 10-pack)
 - [x] Order 100µF 50V electrolytic capacitor (across TB6600 V+/GND)
 - [x] Order TP-Link Tapo C110 IP camera (IR, WiFi, RTSP stream)
-- [ ] Flash firmware, connect to WiFi, verify with `curl /status`
+- [x] Flash firmware, connect to WiFi, verify with `curl /status` — IP: 10.0.0.126 (MAC: 3c:dc:75:f0:46:94, DHCP reservation set in router)
 - [ ] Wire TB6600 + limit switches, test homing
 - [ ] Calibrate `MAX_STEPS` against actual slide travel
 - [ ] Build macOS app in Xcode, add slider by IP, verify jog end-to-end

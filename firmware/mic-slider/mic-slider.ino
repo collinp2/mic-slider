@@ -205,11 +205,15 @@ void setup() {
   stepper.setMaxSpeed(DEFAULT_MAX_SPEED);
   stepper.setAcceleration(DEFAULT_ACCEL);
 
-  WiFi.config(STATIC_IP, GATEWAY_IP, SUBNET_MASK);
+  // Using DHCP — WiFi.config() has known reliability issues on WiFiS3.
+  // Read the actual IP from Serial Monitor after connecting, then set it
+  // as your router's DHCP reservation for a stable address.
   Serial.print("Connecting to ");
   Serial.println(WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  // Wait for DHCP to assign an IP
+  while (WiFi.localIP() == IPAddress(0, 0, 0, 0)) { delay(500); Serial.print("d"); }
   Serial.println();
   Serial.print("IP: ");
   Serial.println(WiFi.localIP());
