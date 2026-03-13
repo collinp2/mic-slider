@@ -8,6 +8,7 @@ struct SliderStatus: Codable {
     let maxSteps: Int
     let jogDir: String
     let homing: Bool
+    let speed: Int
 }
 
 enum Direction: String {

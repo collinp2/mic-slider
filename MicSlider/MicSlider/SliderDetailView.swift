@@ -31,10 +31,6 @@ struct SliderDetailView: View {
 
     private var client: SliderClient { SliderClient(config: config) }
 
-    // 2s polling — WiFiS3 TCP overhead is high enough that faster polling
-    // starves stepper.run() and slows motor movement significantly.
-    private let pollTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -52,7 +48,6 @@ struct SliderDetailView: View {
             .padding(20)
         }
         .frame(minWidth: 420)
-        .onReceive(pollTimer) { _ in fetchStatus() }
         .onAppear { fetchStatus() }
     }
 
@@ -109,8 +104,7 @@ struct SliderDetailView: View {
             HStack(spacing: 16) {
                 // LEFT button — press & hold to jog, release to stop
                 Button {
-                    // single tap: move by step size
-                    send { try await client.move(steps: stepSize.rawValue, direction: .left) }
+                    sendMove(steps: stepSize.rawValue, direction: .left)
                 } label: {
                     Label("Left", systemImage: "chevron.left.2")
                         .frame(maxWidth: .infinity)
@@ -124,7 +118,7 @@ struct SliderDetailView: View {
 
                 // RIGHT button
                 Button {
-                    send { try await client.move(steps: stepSize.rawValue, direction: .right) }
+                    sendMove(steps: stepSize.rawValue, direction: .right)
                 } label: {
                     Label("Right", systemImage: "chevron.right.2")
                         .frame(maxWidth: .infinity)
@@ -139,7 +133,7 @@ struct SliderDetailView: View {
 
             if status?.moving == true {
                 Button("Stop", role: .destructive) {
-                    send { try await client.jogStop() }
+                    send { try await client.jogStop() }  // fetch immediately after stop
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -213,6 +207,37 @@ struct SliderDetailView: View {
         // LongPress release, so we use a fallback: stop after 2s max (user should
         // release and the detail view stop button appears while moving=true).
         // A better UX is handled by the prominent Stop button that appears.
+    }
+
+    /// Send a tap move and fetch status after the motor should have stopped.
+    /// No polling while moving — WiFiS3 TCP overhead starves stepper.run().
+    private func sendMove(steps: Int, direction: Direction) {
+        // Mark as moving immediately for UI feedback
+        status = status.map {
+            SliderStatus(pos: $0.pos, moving: true, maxSteps: $0.maxSteps,
+                         jogDir: direction == .left ? "left" : "right",
+                         homing: false, speed: $0.speed)
+        }
+        Task {
+            do {
+                try await client.move(steps: steps, direction: direction)
+                // Estimate move duration: AccelStepper trapezoidal profile.
+                // Peak speed = min(maxSpeed, sqrt(accel * steps)).
+                // For short moves peak speed < maxSpeed, total time ≈ 2*sqrt(steps/accel).
+                let accel: Double = 4000
+                let maxSpd = speed
+                let peakSpd = min(maxSpd, sqrt(accel * Double(steps)))
+                let moveDuration = (peakSpd < maxSpd)
+                    ? 2.0 * peakSpd / accel          // triangular profile
+                    : peakSpd / accel + Double(steps) / peakSpd  // trapezoidal
+                let delay = moveDuration + 0.5       // 500ms buffer
+                try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                fetchStatus()
+            } catch {
+                errorMessage = error.localizedDescription
+                fetchStatus()
+            }
+        }
     }
 
     private func send(_ action: @escaping () async throws -> Void) {
