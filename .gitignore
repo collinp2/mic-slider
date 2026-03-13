@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+.Trashes
+
+# Xcode
+MicSlider/MicSlider.xcodeproj/xcuserdata/
+MicSlider/MicSlider.xcodeproj/project.xcworkspace/
+MicSlider/DerivedData/
+*.xccheckout
+*.moved-aside
+*.xcuserstate
+build/
+
+# Arduino
+firmware/*.hex
