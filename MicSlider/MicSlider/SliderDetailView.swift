@@ -3,16 +3,16 @@ import SwiftUI
 // MARK: - Step size options
 
 enum StepSize: Int, CaseIterable, Identifiable {
-    case fine   = 50
-    case medium = 200
-    case coarse = 800
+    case fine   = 800   // ~1mm  (800 steps/mm at 1/8 microstepping)
+    case medium = 2000  // ~2.5mm
+    case coarse = 4000  // ~5mm
 
     var id: Int { rawValue }
     var label: String {
         switch self {
-        case .fine:   return "Fine"
-        case .medium: return "Med"
-        case .coarse: return "Coarse"
+        case .fine:   return "Fine (1mm)"
+        case .medium: return "Med (2.5mm)"
+        case .coarse: return "Coarse (5mm)"
         }
     }
 }
