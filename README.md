@@ -170,20 +170,20 @@ Click **+** in the sidebar to add a slider by name and IP address.
 
 ```bash
 # Firmware responding
-curl http://192.168.1.42/status
+curl http://10.0.0.126:8080/status
 
 # Move right 500 steps
-curl "http://192.168.1.42/move?dir=right&steps=500"
+curl "http://10.0.0.126:8080/move?dir=right&steps=500"
 
 # Jog left, then stop
-curl "http://192.168.1.42/jog/start?dir=left"
-curl "http://192.168.1.42/jog/stop"
+curl "http://10.0.0.126:8080/jog/start?dir=left"
+curl "http://10.0.0.126:8080/jog/stop"
 
 # Home (runs to left limit switch, zeros position)
-curl http://192.168.1.42/home
+curl http://10.0.0.126:8080/home
 
 # Change speed
-curl "http://192.168.1.42/speed?val=800"
+curl "http://10.0.0.126:8080/speed?val=800"
 ```
 
 ---
@@ -200,7 +200,7 @@ Each Arduino gets a unique static IP in `config.h`. Add each one in the app side
 - [x] Order limit switches (HiLetgo KW12-3 roller lever, 10-pack)
 - [x] Order 100µF 50V electrolytic capacitor (across TB6600 V+/GND)
 - [x] Order TP-Link Tapo C110 IP camera (IR, WiFi, RTSP stream)
-- [x] Flash firmware, connect to WiFi, verify with `curl /status` — IP: 10.0.0.126 (MAC: 3c:dc:75:f0:46:94, DHCP reservation set in router)
+- [x] Flash firmware, connect to WiFi, verify with `curl /status` — IP: 10.0.0.126:8080 (MAC: 3c:dc:75:f0:46:94, DHCP reservation on Nighthawk; Mac must be on "fiddlehouse" network, not AT&T modem WiFi)
 - [ ] Wire TB6600 + limit switches, test homing
 - [ ] Calibrate `MAX_STEPS` against actual slide travel
 - [ ] Build macOS app in Xcode, add slider by IP, verify jog end-to-end
