@@ -168,6 +168,7 @@ void handleRequest(WiFiClient& client) {
   unsigned long t = millis();
 
   while (client.connected() && millis() - t < 3000) {
+    stepper.run(); // keep stepping while waiting for HTTP data
     if (client.available()) {
       char c = client.read();
       if (c == '\n') {

@@ -31,8 +31,8 @@ struct SliderDetailView: View {
 
     private var client: SliderClient { SliderClient(config: config) }
 
-    // Poll every 2s idle, 300ms while moving
-    private let pollTimer = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
+    // Poll every 2s idle, 500ms while moving
+    private let pollTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 @State private var lastIdlePoll: Date = .distantPast
 
     var body: some View {
