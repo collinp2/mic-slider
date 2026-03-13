@@ -16,7 +16,7 @@
 // HTTP server port
 #define HTTP_PORT     8080
 
-// ── Stepper motor pins (TB6600 driver) ────────────────────────────────────────
+// ── Stepper motor pins (2× TB6600 drivers) ───────────────────────────────────
 // TB6600 wiring (single-ended mode):
 //   PUL+ → STEP_PIN,  PUL- → GND
 //   DIR+ → DIR_PIN,   DIR- → GND
@@ -24,14 +24,17 @@
 //
 // Power: 24V supply to TB6600 VMOT/GND.
 // Arduino powered separately via USB or barrel jack.
-#define STEP_PIN      3
-#define DIR_PIN       4
-// No ENABLE_PIN — ENA left disconnected on TB6600
+#define STEP_PIN_1    3
+#define DIR_PIN_1     4
+#define STEP_PIN_2    8
+#define DIR_PIN_2     9
 
 // ── Limit switches ────────────────────────────────────────────────────────────
 // Wire each switch between the pin and GND (INPUT_PULLUP: LOW = triggered)
-#define LIMIT_LEFT    6
-#define LIMIT_RIGHT   7
+#define LIMIT_LEFT_1   6
+#define LIMIT_RIGHT_1  7
+#define LIMIT_LEFT_2   10
+#define LIMIT_RIGHT_2  11
 
 // ── Motion parameters ─────────────────────────────────────────────────────────
 // Microstepping is set via DIP switches on the TB6600, not in firmware.

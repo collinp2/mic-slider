@@ -1,23 +1,17 @@
 // mic-slider.ino
-// Arduino Uno R4 WiFi (ABX00087) + TB6600 driver + NEMA11 50mm linear slide
+// Arduino Uno R4 WiFi (ABX00087) + 2× TB6600 driver + 2× NEMA11 50mm linear slide
 //
 // Libraries (install via Arduino Library Manager):
 //   - AccelStepper by Mike McCauley
 //   - WiFiS3 is included with the Arduino UNO R4 board package (no install needed)
 //
-// TB6600 wiring:
-//   PUL+ → pin 3 (STEP),  PUL- → GND
-//   DIR+ → pin 4 (DIR),   DIR- → GND
-//   ENA  → leave DISCONNECTED (motor always enabled, holds position when idle)
-//   VMOT/GND → 24V supply
-//
-// HTTP endpoints (all GET):
-//   GET /status                       → {"pos":0,"moving":false,"maxSteps":40000,...}
-//   GET /move?dir=left&steps=200      → move N steps
-//   GET /jog/start?dir=left           → begin continuous movement
-//   GET /jog/stop                     → stop immediately
-//   GET /home                         → run to left limit switch, zero position
-//   GET /speed?val=1600               → set max speed (steps/sec)
+// HTTP endpoints (all GET) — add ?slider=1 or ?slider=2 (default: 1):
+//   GET /status?slider=1                      → {"pos":0,"moving":false,...}
+//   GET /move?slider=1&dir=left&steps=200     → move N steps
+//   GET /jog/start?slider=1&dir=left          → begin continuous movement
+//   GET /jog/stop?slider=1                    → stop immediately
+//   GET /home?slider=1                        → run to left limit switch, zero position
+//   GET /speed?slider=1&val=8000              → set max speed (steps/sec)
 
 #include <WiFiS3.h>
 #include <AccelStepper.h>
@@ -26,29 +20,30 @@
 // ── Server ────────────────────────────────────────────────────────────────────
 WiFiServer server(HTTP_PORT);
 
-// ── Stepper ───────────────────────────────────────────────────────────────────
-AccelStepper stepper(AccelStepper::DRIVER, STEP_PIN, DIR_PIN);
+// ── Steppers ──────────────────────────────────────────────────────────────────
+AccelStepper stepper0(AccelStepper::DRIVER, STEP_PIN_1, DIR_PIN_1);
+AccelStepper stepper1(AccelStepper::DRIVER, STEP_PIN_2, DIR_PIN_2);
+AccelStepper* const steppers[2] = { &stepper0, &stepper1 };
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// ── State (per slider) ────────────────────────────────────────────────────────
 enum class JogDir { NONE, LEFT, RIGHT };
-JogDir jogDir = JogDir::NONE;
-bool   homing = false;
-int    currentMaxSpeed = DEFAULT_MAX_SPEED;
+JogDir jogDir[2]       = { JogDir::NONE, JogDir::NONE };
+bool   homing[2]       = { false, false };
+int    currentMaxSpeed[2] = { DEFAULT_MAX_SPEED, DEFAULT_MAX_SPEED };
 
 // ── Limit switches ────────────────────────────────────────────────────────────
 
-bool limitLeft()  { return digitalRead(LIMIT_LEFT)  == LOW; }
-bool limitRight() { return digitalRead(LIMIT_RIGHT) == LOW; }
+bool limitLeft(int i)  { return digitalRead(i == 0 ? LIMIT_LEFT_1  : LIMIT_LEFT_2)  == LOW; }
+bool limitRight(int i) { return digitalRead(i == 0 ? LIMIT_RIGHT_1 : LIMIT_RIGHT_2) == LOW; }
 
 // ── Stop ──────────────────────────────────────────────────────────────────────
 
-void stopMotor() {
-  stepper.stop();
+void stopMotor(int i) {
+  steppers[i]->stop();
   unsigned long t = millis();
-  while (stepper.isRunning() && millis() - t < 200) stepper.run();
-  jogDir = JogDir::NONE;
-  homing = false;
-  // Motor stays energized (ENA disconnected) — holds position
+  while (steppers[i]->isRunning() && millis() - t < 200) steppers[i]->run();
+  jogDir[i] = JogDir::NONE;
+  homing[i] = false;
 }
 
 // ── Query-string parser ───────────────────────────────────────────────────────
@@ -62,22 +57,30 @@ String getParam(const String& query, const String& key) {
   return (end == -1) ? query.substring(start) : query.substring(start, end);
 }
 
+// Returns 0-based slider index from ?slider=1 or ?slider=2 (default: 0)
+int sliderIdx(const String& query) {
+  String s = getParam(query, "slider");
+  return (s == "2") ? 1 : 0;
+}
+
 // ── JSON status ───────────────────────────────────────────────────────────────
 
-String statusJSON() {
+String statusJSON(int i) {
   String j = "{\"pos\":";
-  j += stepper.currentPosition();
+  j += steppers[i]->currentPosition();
   j += ",\"moving\":";
-  j += stepper.isRunning() ? "true" : "false";
+  j += steppers[i]->isRunning() ? "true" : "false";
   j += ",\"maxSteps\":";
   j += MAX_STEPS;
+  j += ",\"slider\":";
+  j += (i + 1);
   j += ",\"jogDir\":\"";
-  j += (jogDir == JogDir::LEFT  ? "left"  :
-        jogDir == JogDir::RIGHT ? "right" : "none");
+  j += (jogDir[i] == JogDir::LEFT  ? "left"  :
+        jogDir[i] == JogDir::RIGHT ? "right" : "none");
   j += "\",\"homing\":";
-  j += homing ? "true" : "false";
+  j += homing[i] ? "true" : "false";
   j += ",\"speed\":";
-  j += currentMaxSpeed;
+  j += currentMaxSpeed[i];
   j += "}";
   return j;
 }
@@ -102,81 +105,82 @@ void sendError(WiFiClient& client, int code, const String& msg) {
 
 // ── Route handlers ────────────────────────────────────────────────────────────
 
-void handleStatus(WiFiClient& client, const String&) {
-  sendJSON(client, 200, statusJSON());
+void handleStatus(WiFiClient& client, const String& query) {
+  sendJSON(client, 200, statusJSON(sliderIdx(query)));
 }
 
 void handleMove(WiFiClient& client, const String& query) {
+  int i = sliderIdx(query);
   String dir   = getParam(query, "dir");
   String steps = getParam(query, "steps");
   if (dir.isEmpty() || steps.isEmpty()) { sendError(client, 400, "Missing dir or steps"); return; }
   long n = steps.toInt();
   if (n <= 0) { sendError(client, 400, "Invalid steps"); return; }
 
-  homing = false;
-  jogDir = JogDir::NONE;
-  stepper.move(dir == "left" ? -n : n);
-  sendJSON(client, 200, statusJSON());
+  homing[i] = false;
+  jogDir[i]  = JogDir::NONE;
+  steppers[i]->move(dir == "left" ? -n : n);
+  sendJSON(client, 200, statusJSON(i));
 }
 
 void handleJogStart(WiFiClient& client, const String& query) {
+  int i = sliderIdx(query);
   String dir = getParam(query, "dir");
   if (dir.isEmpty()) { sendError(client, 400, "Missing dir"); return; }
 
-  homing = false;
+  homing[i] = false;
   if (dir == "left") {
-    jogDir = JogDir::LEFT;
-    stepper.move(-1000000L);
+    jogDir[i] = JogDir::LEFT;
+    steppers[i]->move(-1000000L);
   } else {
-    jogDir = JogDir::RIGHT;
-    stepper.move(1000000L);
+    jogDir[i] = JogDir::RIGHT;
+    steppers[i]->move(1000000L);
   }
-  sendJSON(client, 200, statusJSON());
+  sendJSON(client, 200, statusJSON(i));
 }
 
-void handleJogStop(WiFiClient& client, const String&) {
-  stopMotor();
-  sendJSON(client, 200, statusJSON());
+void handleJogStop(WiFiClient& client, const String& query) {
+  int i = sliderIdx(query);
+  stopMotor(i);
+  sendJSON(client, 200, statusJSON(i));
 }
 
-void handleHome(WiFiClient& client, const String&) {
-  homing = true;
-  jogDir = JogDir::NONE;
-  stepper.setMaxSpeed(HOME_SPEED);
-  stepper.move(-1000000L); // move left until left limit switch fires
-  sendJSON(client, 200, statusJSON());
+void handleHome(WiFiClient& client, const String& query) {
+  int i = sliderIdx(query);
+  homing[i] = true;
+  jogDir[i]  = JogDir::NONE;
+  steppers[i]->setMaxSpeed(HOME_SPEED);
+  steppers[i]->move(-1000000L);
+  sendJSON(client, 200, statusJSON(i));
 }
 
 void handleSpeed(WiFiClient& client, const String& query) {
+  int i = sliderIdx(query);
   String val = getParam(query, "val");
   if (val.isEmpty()) { sendError(client, 400, "Missing val"); return; }
   int spd = val.toInt();
   if (spd < 1 || spd > 20000) { sendError(client, 400, "Speed out of range"); return; }
-  currentMaxSpeed = spd;
-  stepper.setMaxSpeed(spd);
-  sendJSON(client, 200, statusJSON());
+  currentMaxSpeed[i] = spd;
+  steppers[i]->setMaxSpeed(spd);
+  sendJSON(client, 200, statusJSON(i));
 }
 
 // ── HTTP dispatcher ───────────────────────────────────────────────────────────
 
 void handleRequest(WiFiClient& client) {
-  // Read request character by character — required for reliable WiFiS3 operation.
-  // Collect the first line (request line), drain remaining headers until blank line.
   String requestLine = "";
   String currentLine = "";
   bool firstLine = true;
   unsigned long t = millis();
 
   while (client.connected() && millis() - t < 3000) {
-    stepper.run(); // keep stepping while waiting for HTTP data
+    stepper0.run();
+    stepper1.run();
     if (client.available()) {
       char c = client.read();
       if (c == '\n') {
-        if (firstLine) {
-          requestLine = currentLine;
-          firstLine = false;
-        }
-        if (currentLine.length() == 0 || currentLine == "\r") break; // blank line = end of headers
+        if (firstLine) { requestLine = currentLine; firstLine = false; }
+        if (currentLine.length() == 0 || currentLine == "\r") break;
         currentLine = "";
       } else if (c != '\r') {
         currentLine += c;
@@ -215,19 +219,21 @@ void setup() {
   Serial.begin(115200);
   while (!Serial && millis() < 3000);
 
-  pinMode(LIMIT_LEFT,  INPUT_PULLUP);
-  pinMode(LIMIT_RIGHT, INPUT_PULLUP);
+  pinMode(LIMIT_LEFT_1,  INPUT_PULLUP);
+  pinMode(LIMIT_RIGHT_1, INPUT_PULLUP);
+  pinMode(LIMIT_LEFT_2,  INPUT_PULLUP);
+  pinMode(LIMIT_RIGHT_2, INPUT_PULLUP);
 
-  stepper.setMaxSpeed(DEFAULT_MAX_SPEED);
-  stepper.setAcceleration(DEFAULT_ACCEL);
+  for (int i = 0; i < 2; i++) {
+    steppers[i]->setMaxSpeed(DEFAULT_MAX_SPEED);
+    steppers[i]->setAcceleration(DEFAULT_ACCEL);
+  }
 
-  // Force DHCP by zeroing out any cached static IP on the ESP32 coprocessor
   WiFi.config(IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0));
   Serial.print("Connecting to ");
   Serial.println(WIFI_SSID);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  // Wait for DHCP to assign an IP
   while (WiFi.localIP() == IPAddress(0, 0, 0, 0)) { delay(500); Serial.print("d"); }
   Serial.println();
   Serial.print("IP: ");
@@ -241,8 +247,6 @@ void setup() {
 
 void loop() {
   // ── HTTP ──────────────────────────────────────────────────────────────────
-  // Throttle server.available() — it does SPI to ESP32-S3 and steals CPU from
-  // stepper.run(). Check at most every 50ms; stepper gets full time otherwise.
   static unsigned long lastWiFiCheck = 0;
   unsigned long now = millis();
   if (now - lastWiFiCheck >= 50) {
@@ -254,22 +258,25 @@ void loop() {
     }
   }
 
-  // ── Limit switch safety ───────────────────────────────────────────────────
-  if (stepper.isRunning()) {
-    if ((jogDir == JogDir::LEFT || homing) && limitLeft()) {
-      stepper.stop();
-      if (homing) {
-        stepper.setCurrentPosition(0);
-        stepper.setMaxSpeed(currentMaxSpeed);
-        homing = false;
+  // ── Limit switch safety (both sliders) ────────────────────────────────────
+  for (int i = 0; i < 2; i++) {
+    if (steppers[i]->isRunning()) {
+      if ((jogDir[i] == JogDir::LEFT || homing[i]) && limitLeft(i)) {
+        steppers[i]->stop();
+        if (homing[i]) {
+          steppers[i]->setCurrentPosition(0);
+          steppers[i]->setMaxSpeed(currentMaxSpeed[i]);
+          homing[i] = false;
+        }
+        jogDir[i] = JogDir::NONE;
       }
-      jogDir = JogDir::NONE;
-    }
-    if (jogDir == JogDir::RIGHT && limitRight()) {
-      stepper.stop();
-      jogDir = JogDir::NONE;
+      if (jogDir[i] == JogDir::RIGHT && limitRight(i)) {
+        steppers[i]->stop();
+        jogDir[i] = JogDir::NONE;
+      }
     }
   }
 
-  stepper.run();
+  stepper0.run();
+  stepper1.run();
 }

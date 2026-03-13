@@ -61,7 +61,10 @@ actor SliderClient {
     // MARK: Private
 
     private func get(_ path: String) async throws -> Data {
-        guard let url = URL(string: "http://\(config.ipAddress):\(config.port)\(path)") else {
+        // Append slider channel to every request
+        let sep = path.contains("?") ? "&" : "?"
+        let fullPath = "\(path)\(sep)slider=\(config.channel)"
+        guard let url = URL(string: "http://\(config.ipAddress):\(config.port)\(fullPath)") else {
             throw URLError(.badURL)
         }
         let (data, response) = try await session.data(from: url)

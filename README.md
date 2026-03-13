@@ -26,25 +26,28 @@ An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear l
 
 ### TB6600 → Arduino (single-ended mode)
 
-| TB6600 terminal | Connect to |
-|---|---|
-| PUL+ | Arduino pin 3 (STEP) |
-| PUL− | GND |
-| DIR+ | Arduino pin 4 (DIR) |
-| DIR− | GND |
-| ENA+ / ENA− | **Leave disconnected** — motor stays enabled and holds position |
-| VMOT | 24V supply + |
-| GND | 24V supply − |
-| A+/A−/B+/B− | NEMA11 stepper motor coils |
+Both sliders connect to the same Arduino. Each TB6600 gets its own STEP/DIR pins.
+
+| TB6600 terminal | Slider 1 | Slider 2 |
+|---|---|---|
+| PUL+ | Pin 3 (STEP) | Pin 8 (STEP) |
+| PUL− | GND | GND |
+| DIR+ | Pin 4 (DIR) | Pin 9 (DIR) |
+| DIR− | GND | GND |
+| ENA+ / ENA− | **Leave disconnected** | **Leave disconnected** |
+| VMOT | 24V supply + | 24V supply + |
+| GND | 24V supply − | 24V supply − |
+| A+/A−/B+/B− | NEMA11 motor coils | NEMA11 motor coils |
 
 ### Limit switches
 
-| Switch | Arduino pin |
-|---|---|
-| Left limit | Pin 6 (INPUT_PULLUP — wire switch between pin and GND) |
-| Right limit | Pin 7 (INPUT_PULLUP — wire switch between pin and GND) |
+| Switch | Slider 1 | Slider 2 |
+|---|---|---|
+| Left limit | Pin 6 | Pin 10 |
+| Right limit | Pin 7 | Pin 11 |
 
-Use the **COM** and **NC (normally closed)** terminals on each KW12-3. Leave NO unconnected.
+Wire each switch between the pin and GND (INPUT_PULLUP: LOW = triggered).
+Use **COM** and **NC (normally closed)** terminals on each KW12-3. Leave NO unconnected.
 
 ### Power
 
@@ -190,7 +193,7 @@ curl "http://10.0.0.126:8080/speed?val=800"
 
 ## Scaling to Multiple Sliders
 
-Each Arduino gets a unique static IP in `config.h`. Add each one in the app sidebar. Two TB6600 drivers + a 24V 5A supply handles both sliders simultaneously.
+Both sliders run on a single Arduino R4 WiFi. Add each slider in the app sidebar pointing to the same IP, selecting Channel 1 or Channel 2. Two TB6600 drivers share the same 24V 5A supply. All endpoints accept `?slider=1` or `?slider=2` (default: 1).
 
 ---
 

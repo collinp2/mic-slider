@@ -58,7 +58,7 @@ struct SliderDetailView: View {
             Text(config.name)
                 .font(.title2).bold()
             HStack(spacing: 8) {
-                Text("IP: \(config.ipAddress):\(config.port)")
+                Text("IP: \(config.ipAddress):\(config.port)  ·  Slider \(config.channel)")
                     .foregroundStyle(.secondary)
                 Circle()
                     .fill(status != nil ? Color.green : Color.red)

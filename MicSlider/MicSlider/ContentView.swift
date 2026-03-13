@@ -77,6 +77,7 @@ struct AddSliderSheet: View {
     @State private var name      = ""
     @State private var ip        = ""
     @State private var port      = "8080"
+    @State private var channel   = 1
     @State private var cameraURL = ""
     @State private var maxSteps  = "40000"
 
@@ -88,6 +89,11 @@ struct AddSliderSheet: View {
                 TextField("Name", text: $name, prompt: Text("Stage Left Mic"))
                 TextField("IP Address", text: $ip, prompt: Text("10.0.0.126"))
                 TextField("Port", text: $port)
+                Picker("Channel", selection: $channel) {
+                    Text("Slider 1").tag(1)
+                    Text("Slider 2").tag(2)
+                }
+                .pickerStyle(.segmented)
                 TextField("Camera URL (optional)", text: $cameraURL, prompt: Text("http://192.168.1.50/stream"))
                 TextField("Max Steps", text: $maxSteps)
             }
@@ -100,9 +106,10 @@ struct AddSliderSheet: View {
                     let config = SliderConfig(
                         name:      name.isEmpty ? "Slider" : name,
                         ipAddress: ip,
-                        port:      Int(port) ?? 80,
+                        port:      Int(port) ?? 8080,
+                        channel:   channel,
                         cameraURL: cameraURL.isEmpty ? nil : cameraURL,
-                        maxSteps:  Int(maxSteps) ?? 20000
+                        maxSteps:  Int(maxSteps) ?? 40000
                     )
                     onAdd(config)
                     dismiss()
