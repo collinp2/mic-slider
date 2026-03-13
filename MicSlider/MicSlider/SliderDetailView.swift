@@ -228,15 +228,25 @@ struct SliderDetailView: View {
 
 // MARK: - SpeakerPositionView
 
-/// Top-down speaker diagram. pos=0 = dead center of voice coil, pos=maxSteps = edge.
+/// Zoomed top-down view of just the mic travel zone.
+/// Real-world scale: voice coil ~22mm radius, slide travel 50mm.
+/// The diagram fills its width with the full 50mm travel range.
+/// Concentric rings represent the cone at proportional spacing.
 struct SpeakerPositionView: View {
     let pos: Int
     let maxSteps: Int
+
+    // Real-world dimensions (mm)
+    private let voiceCoilRadiusMM: Double = 22   // 1.75" dia voice coil → 22mm radius
+    private let travelMM: Double         = 50    // full slider travel
 
     private var fraction: Double {
         guard maxSteps > 0 else { return 0 }
         return min(1.0, max(0.0, Double(pos) / Double(maxSteps)))
     }
+
+    // mm offset from center at current position
+    private var positionMM: Double { fraction * travelMM }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -244,69 +254,95 @@ struct SpeakerPositionView: View {
 
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(nsColor: .windowBackgroundColor))
+                    .fill(Color(white: 0.12))
 
                 Canvas { context, size in
-                    let cx = size.width  / 2
-                    let cy = size.height / 2
-                    let maxR = min(cx, cy) - 12
+                    // The canvas shows the view from above, centered on the voice coil axis.
+                    // Horizontal axis = mic travel direction (left = center, right = edge).
+                    // We show a window from -8mm to +58mm (a little past max travel).
+                    let viewWidthMM: Double  = 66   // mm shown across full width
+                    let viewOffsetMM: Double = -8   // left edge starts 8mm left of center
+                    let scale = size.width / viewWidthMM  // px per mm
 
-                    // Speaker rings
-                    let ringCount = 6
-                    for i in (1...ringCount).reversed() {
-                        let r = maxR * Double(i) / Double(ringCount)
-                        let rect = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
+                    func xForMM(_ mm: Double) -> Double { (mm - viewOffsetMM) * scale }
+                    let cy = size.height / 2
+
+                    // ── Cone rings (full circles centered on axis) ──────────
+                    // Show rings at voice coil radius and several cone rings beyond
+                    let ringsMM: [Double] = [22, 35, 50, 68, 90, 120]
+                    for r in ringsMM {
+                        let cx = xForMM(0)
+                        let rpx = r * scale
+                        let rect = CGRect(x: cx - rpx, y: cy - rpx, width: rpx * 2, height: rpx * 2)
                         var p = Path(); p.addEllipse(in: rect)
-                        let alpha = 0.15 + 0.12 * Double(ringCount - i + 1)
-                        context.stroke(p, with: .color(.white.opacity(alpha)), lineWidth: i == ringCount ? 2.5 : 1.2)
+                        let isVC = r == 22
+                        context.stroke(p,
+                            with: .color(.white.opacity(isVC ? 0.55 : 0.2)),
+                            lineWidth: isVC ? 1.8 : 1.0)
                     }
 
-                    // Voice coil
-                    let vcR = maxR * 0.14
-                    let vcRect = CGRect(x: cx - vcR, y: cy - vcR, width: vcR * 2, height: vcR * 2)
-                    var vcPath = Path(); vcPath.addEllipse(in: vcRect)
-                    context.fill(vcPath, with: .color(.white.opacity(0.08)))
-                    context.stroke(vcPath, with: .color(.white.opacity(0.5)), lineWidth: 1.5)
+                    // ── Voice coil fill ─────────────────────────────────────
+                    let vcpx = voiceCoilRadiusMM * scale
+                    let cxAxis = xForMM(0)
+                    let vcRect = CGRect(x: cxAxis - vcpx, y: cy - vcpx, width: vcpx * 2, height: vcpx * 2)
+                    var vcFill = Path(); vcFill.addEllipse(in: vcRect)
+                    context.fill(vcFill, with: .color(.white.opacity(0.06)))
 
-                    // Travel guide line
-                    var linePath = Path()
-                    linePath.move(to: CGPoint(x: cx, y: cy))
-                    linePath.addLine(to: CGPoint(x: cx + maxR - 4, y: cy))
-                    context.stroke(linePath, with: .color(.white.opacity(0.15)), lineWidth: 1)
+                    // ── Travel guide line ───────────────────────────────────
+                    var guide = Path()
+                    guide.move(to: CGPoint(x: xForMM(0), y: cy))
+                    guide.addLine(to: CGPoint(x: xForMM(travelMM), y: cy))
+                    context.stroke(guide, with: .color(.white.opacity(0.12)), lineWidth: 1)
 
-                    // Trail from center to mic
-                    let micX = cx + fraction * (maxR - 4)
-                    var trailPath = Path()
-                    trailPath.move(to: CGPoint(x: cx, y: cy))
-                    trailPath.addLine(to: CGPoint(x: micX, y: cy))
-                    context.stroke(trailPath, with: .color(.red.opacity(0.5)), lineWidth: 2)
+                    // ── Trail from center to mic ────────────────────────────
+                    let micXpx = xForMM(positionMM)
+                    var trail = Path()
+                    trail.move(to: CGPoint(x: xForMM(0), y: cy))
+                    trail.addLine(to: CGPoint(x: micXpx, y: cy))
+                    context.stroke(trail, with: .color(.red.opacity(0.45)), lineWidth: 2)
 
-                    // Mic dot
+                    // ── Mic dot ─────────────────────────────────────────────
                     let micR: Double = 7
-                    let micRect = CGRect(x: micX - micR, y: cy - micR, width: micR * 2, height: micR * 2)
+                    let micRect = CGRect(x: micXpx - micR, y: cy - micR, width: micR * 2, height: micR * 2)
                     var micPath = Path(); micPath.addEllipse(in: micRect)
                     context.fill(micPath, with: .color(.red))
                     context.stroke(micPath, with: .color(.white.opacity(0.8)), lineWidth: 1.5)
 
-                    // Center mark
+                    // ── Center mark ─────────────────────────────────────────
                     let cmR: Double = 3
-                    let cmRect = CGRect(x: cx - cmR, y: cy - cmR, width: cmR * 2, height: cmR * 2)
+                    let cmRect = CGRect(x: xForMM(0) - cmR, y: cy - cmR, width: cmR * 2, height: cmR * 2)
                     var cmPath = Path(); cmPath.addEllipse(in: cmRect)
-                    context.fill(cmPath, with: .color(.white.opacity(0.6)))
+                    context.fill(cmPath, with: .color(.white.opacity(0.7)))
                 }
 
+                // Labels
                 VStack {
                     Spacer()
                     HStack {
-                        Text("center").font(.system(size: 10)).foregroundStyle(.secondary)
+                        Text("axis").font(.system(size: 10)).foregroundStyle(.secondary)
                         Spacer()
-                        Text("edge →").font(.system(size: 10)).foregroundStyle(.secondary)
+                        Text("← voice coil edge ~22mm").font(.system(size: 10)).foregroundStyle(Color.white.opacity(0.4))
+                        Spacer()
+                        Text("50mm →").font(.system(size: 10)).foregroundStyle(.secondary)
                     }
                     .padding(.horizontal, 14)
                     .padding(.bottom, 8)
                 }
+
+                // Position readout
+                VStack {
+                    HStack {
+                        Spacer()
+                        Text(String(format: "%.1f mm off-axis", positionMM))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.trailing, 14)
+                            .padding(.top, 10)
+                    }
+                    Spacer()
+                }
             }
-            .frame(height: 180)
+            .frame(height: 200)
             .animation(.easeInOut(duration: 0.3), value: fraction)
         }
     }
