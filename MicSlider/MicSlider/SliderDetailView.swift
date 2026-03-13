@@ -38,6 +38,7 @@ struct SliderDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 headerSection
+                speakerSection
                 positionSection
                 jogSection
                 stepSizeSection
@@ -73,6 +74,13 @@ struct SliderDetailView: View {
                 Text(err).foregroundStyle(.red).font(.caption)
             }
         }
+    }
+
+    private var speakerSection: some View {
+        SpeakerPositionView(
+            pos:      status?.pos ?? 0,
+            maxSteps: status?.maxSteps ?? config.maxSteps
+        )
     }
 
     private var positionSection: some View {
