@@ -31,8 +31,9 @@ struct SliderDetailView: View {
 
     private var client: SliderClient { SliderClient(config: config) }
 
-    // Poll every 2 seconds
-    private let pollTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+    // Poll every 2s idle, 300ms while moving
+    private let pollTimer = Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()
+@State private var lastIdlePoll: Date = .distantPast
 
     var body: some View {
         ScrollView {
@@ -51,7 +52,15 @@ struct SliderDetailView: View {
             .padding(20)
         }
         .frame(minWidth: 420)
-        .onReceive(pollTimer) { _ in fetchStatus() }
+        .onReceive(pollTimer) { _ in
+            // Always poll while moving; throttle to 2s when idle
+            if status?.moving == true {
+                fetchStatus()
+            } else if Date().timeIntervalSince(lastIdlePoll) >= 2.0 {
+                lastIdlePoll = Date()
+                fetchStatus()
+            }
+        }
         .onAppear { fetchStatus() }
     }
 
