@@ -31,9 +31,9 @@ struct SliderDetailView: View {
 
     private var client: SliderClient { SliderClient(config: config) }
 
-    // Poll every 2s idle, 500ms while moving
-    private let pollTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
-@State private var lastIdlePoll: Date = .distantPast
+    // 2s polling — WiFiS3 TCP overhead is high enough that faster polling
+    // starves stepper.run() and slows motor movement significantly.
+    private let pollTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
     var body: some View {
         ScrollView {
@@ -52,15 +52,7 @@ struct SliderDetailView: View {
             .padding(20)
         }
         .frame(minWidth: 420)
-        .onReceive(pollTimer) { _ in
-            // Always poll while moving; throttle to 2s when idle
-            if status?.moving == true {
-                fetchStatus()
-            } else if Date().timeIntervalSince(lastIdlePoll) >= 2.0 {
-                lastIdlePoll = Date()
-                fetchStatus()
-            }
-        }
+        .onReceive(pollTimer) { _ in fetchStatus() }
         .onAppear { fetchStatus() }
     }
 
