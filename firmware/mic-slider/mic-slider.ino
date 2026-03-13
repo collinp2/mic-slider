@@ -151,7 +151,7 @@ void handleSpeed(WiFiClient& client, const String& query) {
   String val = getParam(query, "val");
   if (val.isEmpty()) { sendError(client, 400, "Missing val"); return; }
   int spd = val.toInt();
-  if (spd < 1 || spd > 10000) { sendError(client, 400, "Speed out of range"); return; }
+  if (spd < 1 || spd > 20000) { sendError(client, 400, "Speed out of range"); return; }
   currentMaxSpeed = spd;
   stepper.setMaxSpeed(spd);
   sendJSON(client, 200, statusJSON());

@@ -42,9 +42,9 @@
 //   At 1/8 step: 1600 steps/rev ÷ 2mm pitch = 800 steps/mm × 50mm = 40,000 steps
 //
 // Calibrate by homing, jogging to full travel, reading position from /status.
-#define DEFAULT_MAX_SPEED   1600    // steps/sec
-#define DEFAULT_ACCEL       800     // steps/sec²
-#define HOME_SPEED          400     // steps/sec during homing (slow and safe)
+#define DEFAULT_MAX_SPEED   8000    // steps/sec (~10mm/sec at 1/8 step)
+#define DEFAULT_ACCEL       4000    // steps/sec²
+#define HOME_SPEED          800     // steps/sec during homing (slow and safe)
 #define MAX_STEPS           40000   // ~50mm at 1/8 step, 2mm pitch — calibrate!
 
 #endif // CONFIG_H

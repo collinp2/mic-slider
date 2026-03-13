@@ -25,7 +25,7 @@ struct SliderDetailView: View {
     @State private var status: SliderStatus? = nil
     @State private var errorMessage: String? = nil
     @State private var stepSize: StepSize = .medium
-    @State private var speed: Double = 800
+    @State private var speed: Double = 8000
     @State private var cameraExpanded: Bool = false
     @State private var jogTimer: Timer? = nil
 
@@ -161,13 +161,13 @@ struct SliderDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Speed: \(Int(speed)) steps/s").font(.headline)
             HStack {
-                Text("100").foregroundStyle(.secondary).font(.caption)
-                Slider(value: $speed, in: 100...3000, step: 50) { editing in
+                Text("400").foregroundStyle(.secondary).font(.caption)
+                Slider(value: $speed, in: 400...20000, step: 200) { editing in
                     if !editing {
                         send { try await client.setSpeed(Int(speed)) }
                     }
                 }
-                Text("3000").foregroundStyle(.secondary).font(.caption)
+                Text("20000").foregroundStyle(.secondary).font(.caption)
             }
         }
     }
