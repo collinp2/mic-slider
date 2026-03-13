@@ -13,7 +13,7 @@ An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear l
 | Arduino Uno R4 WiFi (ABX00087) | Built-in WiFi — no shield needed |
 | TB6600 stepper driver (×2) | 4A, 9–42V; one per slider |
 | NEMA11 50mm linear slide (24V, 1.8°) | CNC lead-screw slide, T-shaped screw |
-| 24V DC power supply, 5A | Recommended: 24V 5A switching supply (~$12 on Amazon); powers both sliders |
+| 24V 5A wall adapter (5.5mm × 2.5mm barrel jack) | AC 100–240V to DC 24V 5A; powers both sliders |
 | Limit switches (×2 per slider) | Wire NC between pin and GND |
 | Dupont jumper wires | Arduino → TB6600 signal wiring |
 | Adafruit Motor Shield v2 | **Not used** — underpowered for 24V; TB6600 is wired direct to Arduino |
@@ -46,6 +46,15 @@ An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear l
 
 - **24V supply** → TB6600 VMOT/GND only
 - **Arduino** powered separately via USB or barrel jack (do not connect 24V to Arduino)
+
+#### Connecting the wall adapter to the TB6600
+
+The supply has a 5.5mm × 2.5mm barrel jack — cut it off and connect bare wires to the TB6600 screw terminals:
+
+- **Center conductor → TB6600 V+**
+- **Outer conductor → TB6600 GND**
+
+Strip ~5–6mm of insulation, insert into terminals, tighten. Double-check polarity before powering on — reversing it will damage the TB6600.
 
 ---
 
@@ -183,7 +192,7 @@ Each Arduino gets a unique static IP in `config.h`. Add each one in the app side
 
 ## Roadmap
 
-- [ ] Order 24V 5A power supply
+- [x] Order 24V 5A power supply (24V 5A wall adapter, 5.5mm × 2.5mm — cut barrel jack, wire direct to TB6600)
 - [ ] Flash firmware, connect to WiFi, verify with `curl /status`
 - [ ] Wire TB6600 + limit switches, test homing
 - [ ] Calibrate `MAX_STEPS` against actual slide travel
