@@ -203,6 +203,6 @@ Each Arduino gets a unique static IP in `config.h`. Add each one in the app side
 - [x] Flash firmware, connect to WiFi, verify with `curl /status` — IP: 10.0.0.126:8080 (MAC: 3c:dc:75:f0:46:94, DHCP reservation on Nighthawk; Mac must be on "fiddlehouse" network, not AT&T modem WiFi)
 - [ ] Wire TB6600 + limit switches, test homing
 - [ ] Calibrate `MAX_STEPS` against actual slide travel
-- [ ] Build macOS app in Xcode, add slider by IP, verify jog end-to-end
+- [x] Build macOS app in Xcode, add slider by IP, verify jog end-to-end
 - [ ] Add second slider
 - [ ] Update CameraFeedView to handle Tapo C110 RTSP stream (AVFoundation or Tapo HTTP substream URL)
