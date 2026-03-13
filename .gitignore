@@ -13,3 +13,4 @@ build/
 
 # Arduino
 firmware/*.hex
+firmware/config.h

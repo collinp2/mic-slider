@@ -1,6 +1,5 @@
-// config.h — WiFi and pin configuration for mic-slider firmware
-// Arduino Uno R4 WiFi (ABX00087) + TB6600 driver + NEMA11 linear slide
-// Edit these values before flashing.
+// config.example.h — copy this to config.h and fill in your values.
+// config.h is gitignored and will never be committed.
 
 #ifndef CONFIG_H
 #define CONFIG_H
@@ -10,8 +9,8 @@
 #define WIFI_PASS     "YourPassword"
 
 // Static IP (call WiFi.config() BEFORE WiFi.begin() for this to take effect)
-#define STATIC_IP     IPAddress(192, 168, 1, 42)
-#define GATEWAY_IP    IPAddress(192, 168, 1,  1)
+#define STATIC_IP     IPAddress(10, 0, 0, 42)
+#define GATEWAY_IP    IPAddress(10, 0, 0,  1)
 #define SUBNET_MASK   IPAddress(255, 255, 255, 0)
 
 // HTTP server port
@@ -40,16 +39,9 @@
 //
 // MAX_STEPS calibration for 50mm NEMA11 linear slide:
 //   Lead screw pitch is typically 2mm/rev for these slides.
-//   200 full steps/rev × 4 (1/8 microstep / 2mm pitch) = 800 steps/mm
-//   Wait — at 1/8 step: 1600 steps/rev ÷ 2mm = 800 steps/mm × 50mm = 40,000 steps
+//   At 1/8 step: 1600 steps/rev ÷ 2mm pitch = 800 steps/mm × 50mm = 40,000 steps
 //
-//   If your lead screw pitch is different, adjust accordingly:
-//     Full step:  200 steps/rev
-//     1/2 step:   400 steps/rev  → 50mm at 2mm pitch = 10,000 steps
-//     1/4 step:   800 steps/rev  → 50mm at 2mm pitch = 20,000 steps
-//     1/8 step:  1600 steps/rev  → 50mm at 2mm pitch = 40,000 steps (recommended)
-//
-// Set this after you measure actual travel distance per step on your hardware.
+// Calibrate by homing, jogging to full travel, reading position from /status.
 #define DEFAULT_MAX_SPEED   1600    // steps/sec
 #define DEFAULT_ACCEL       800     // steps/sec²
 #define HOME_SPEED          400     // steps/sec during homing (slow and safe)
