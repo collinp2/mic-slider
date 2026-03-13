@@ -16,6 +16,7 @@ An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear l
 | 24V 5A wall adapter (5.5mm × 2.5mm barrel jack) | AC 100–240V to DC 24V 5A; powers both sliders |
 | HiLetgo KW12-3 roller lever microswitches (×10 pack) | SPDT, AC 250V 5A; 2 per slider, plenty of spares |
 | 100µF 50V electrolytic capacitor | Across TB6600 V+/GND — absorbs voltage spikes during deceleration, protects the driver |
+| TP-Link Tapo C110 IP camera | IR night vision, WiFi, RTSP stream; one per slider for mic position monitoring |
 | Dupont jumper wires | Arduino → TB6600 signal wiring |
 | Adafruit Motor Shield v2 | **Not used** — underpowered for 24V; TB6600 is wired direct to Arduino |
 
@@ -198,8 +199,10 @@ Each Arduino gets a unique static IP in `config.h`. Add each one in the app side
 - [x] Order 24V 5A power supply (24V 5A wall adapter, 5.5mm × 2.5mm — cut barrel jack, wire direct to TB6600)
 - [x] Order limit switches (HiLetgo KW12-3 roller lever, 10-pack)
 - [x] Order 100µF 50V electrolytic capacitor (across TB6600 V+/GND)
+- [x] Order TP-Link Tapo C110 IP camera (IR, WiFi, RTSP stream)
 - [ ] Flash firmware, connect to WiFi, verify with `curl /status`
 - [ ] Wire TB6600 + limit switches, test homing
 - [ ] Calibrate `MAX_STEPS` against actual slide travel
 - [ ] Build macOS app in Xcode, add slider by IP, verify jog end-to-end
 - [ ] Add second slider
+- [ ] Update CameraFeedView to handle Tapo C110 RTSP stream (AVFoundation or Tapo HTTP substream URL)
