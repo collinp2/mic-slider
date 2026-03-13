@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var selectedID: UUID? = nil
     @State private var showAddSheet = false
 
+    private static let lastSelectedKey = "MicSliderLastSelected"
+
     var body: some View {
         NavigationSplitView {
             List(selection: $selectedID) {
@@ -49,6 +51,19 @@ struct ContentView: View {
                 store.add(newConfig)
                 selectedID = newConfig.id
             }
+        }
+        .onAppear {
+            // Restore last selected slider
+            if let uuidString = UserDefaults.standard.string(forKey: Self.lastSelectedKey),
+               let uuid = UUID(uuidString: uuidString),
+               store.sliders.contains(where: { $0.id == uuid }) {
+                selectedID = uuid
+            } else {
+                selectedID = store.sliders.first?.id
+            }
+        }
+        .onChange(of: selectedID) { newID in
+            UserDefaults.standard.set(newID?.uuidString, forKey: Self.lastSelectedKey)
         }
     }
 }
