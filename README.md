@@ -12,8 +12,8 @@ An **Arduino Uno R4 WiFi** + **3× Adafruit Motor Shield v2** (stacked) controls
 |---|---|
 | Arduino Uno R4 WiFi (ABX00087) | Built-in WiFi — no shield needed |
 | Adafruit Motor Shield v2 (×3) | Stacked via I2C; controls 2 steppers each = 6 total |
-| NEMA11 linear slide, T6x1, 100mm (×6) | 28mm flange, 1mm pitch, 0.6A, 1.8° step angle |
-| 12V 10A power supply | Powers all 3 Motor Shields; 7–8V preferred to keep current near motor's 0.6A rating |
+| NEMA11 linear slide, T6x1, 100mm (×6) | 28mm flange, 1mm pitch, 0.6A, 1.8° step angle — [Amazon $35.99](https://www.amazon.com) |
+| 12V 2A power supply, center positive, 5.5mm×2.1mm barrel jack | Powers all 3 Motor Shields; coil release after each move prevents heat buildup |
 | HiLetgo KW12-3 roller lever microswitches (×10 pack) | SPDT; 2 per slider for homing |
 | TP-Link Tapo C110 IP camera | IR night vision, WiFi, RTSP stream; one per slider (optional) |
 | Dupont jumper wires | Limit switch wiring |
@@ -68,7 +68,7 @@ Use **COM** and **NC (normally closed)** terminals on each KW12-3. Leave NO unco
 - **12V supply** → Motor Shield power terminals (M+ / GND screw block on bottom shield)
 - **Arduino** powered separately via USB or barrel jack
 
-> **Note on voltage:** The NEMA11 motors are rated 0.6A. The Motor Shield v2 has no adjustable current limiting. At 12V the peak static current can exceed the motor rating and generate heat. A 7–8V supply better matches the 0.6A rating. The firmware releases motor coils after each move — the T6x1 lead screw is self-locking and will not back-drive.
+> **Power supply:** Use a **12V 2A center-positive** adapter (5.5mm×2.1mm barrel). The Motor Shield v2 maximum input is 13.5V — do not use a 24V supply. The firmware releases motor coils after every move; the T6x1 lead screw is self-locking and will not back-drive, so heat is not a concern in normal use.
 
 ---
 
