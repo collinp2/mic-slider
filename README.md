@@ -206,3 +206,4 @@ curl "http://10.0.0.42:8080/speed?val=1500&slider=1"
 - [ ] Calibrate MAX_STEPS against actual slide travel
 - [ ] Update CameraFeedView for Tapo C110 RTSP stream (AVFoundation)
 - [ ] Add 6 Tapo C110 cameras (one per slider)
+- [ ] **Future:** Add 7th channel via X-Carve Z-axis assembly (NEMA23, TB6600 driver, 24V supply) on STEP/DIR pins A0/A1 — vertical mic or camera positioning controlled from the same app
