@@ -12,7 +12,7 @@ An **Arduino Uno R4 WiFi** + **3× Adafruit Motor Shield v2** (stacked) controls
 |---|---|
 | Arduino Uno R4 WiFi (ABX00087) | Built-in WiFi — no shield needed |
 | Adafruit Motor Shield v2 (×3) | Stacked via I2C; controls 2 steppers each = 6 total |
-| NEMA11 linear slide, T6x1, 100mm (×6) | 28mm flange, 1mm pitch, 0.6A, 1.8° step angle — [Amazon $35.99](https://www.amazon.com) |
+| NEMA11 linear slide, T6x1, 100mm (×6) | 28mm flange, 1mm pitch, 0.6A, 1.8° step angle — Amazon ~$35.99 · Temu ~$29.76 (US warehouse, no import fees) |
 | 12V 2A power supply, center positive, 5.5mm×2.1mm barrel jack | Powers all 3 Motor Shields; coil release after each move prevents heat buildup |
 | HiLetgo KW12-3 roller lever microswitches (×10 pack) | SPDT; 2 per slider for homing |
 | TP-Link Tapo C110 IP camera | IR night vision, WiFi, RTSP stream; one per slider (optional) |
