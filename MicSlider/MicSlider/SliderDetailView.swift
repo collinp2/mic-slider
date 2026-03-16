@@ -21,9 +21,12 @@ enum StepSize: Int, CaseIterable, Identifiable {
 
 struct SliderDetailView: View {
     let config: SliderConfig
+    var onPositionUpdate: ((Int) -> Void)? = nil
 
     @State private var status: SliderStatus? = nil
     @State private var errorMessage: String? = nil
+    private var displayPos: Int { status?.pos ?? config.lastKnownPosition ?? 0 }
+    private var displayMax: Int { status?.maxSteps ?? config.maxSteps }
     @State private var stepSize: StepSize = .medium
     @State private var speed: Double = 8000
     @State private var cameraExpanded: Bool = false
@@ -74,24 +77,22 @@ struct SliderDetailView: View {
 
     private var speakerSection: some View {
         SpeakerPositionView(
-            pos:      status?.pos ?? 0,
-            maxSteps: status?.maxSteps ?? config.maxSteps
+            pos:      displayPos,
+            maxSteps: displayMax
         )
     }
 
     private var positionSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Position").font(.headline)
-            let pos      = status?.pos ?? 0
-            let maxSteps = status?.maxSteps ?? config.maxSteps
-            let fraction = maxSteps > 0 ? Double(pos) / Double(maxSteps) : 0
+            let fraction = displayMax > 0 ? Double(displayPos) / Double(displayMax) : 0
 
             ProgressView(value: fraction)
                 .progressViewStyle(.linear)
             HStack {
-                Text("\(pos)")
+                Text("\(displayPos)")
                 Spacer()
-                Text("\(maxSteps) steps")
+                Text("\(displayMax) steps")
             }
             .foregroundStyle(.secondary)
             .font(.caption)
@@ -194,6 +195,9 @@ struct SliderDetailView: View {
             do {
                 status = try await client.status()
                 errorMessage = nil
+                if let pos = status?.pos {
+                    onPositionUpdate?(pos)
+                }
                 // If still moving, keep checking until it stops
                 if status?.moving == true {
                     try await Task.sleep(nanoseconds: 1_000_000_000)

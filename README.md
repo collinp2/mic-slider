@@ -2,7 +2,7 @@
 
 WiFi-controlled stepper-motor microphone slider system.
 
-An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear lead-screw slide**. A native **macOS SwiftUI app** lets you jog sliders left/right, set speed, home them, and optionally show an IP camera feed alongside each one. Designed to start with one slider and scale to more.
+An **Arduino Uno R4 WiFi** + **3× Adafruit Motor Shield v2** (stacked) controls up to **6 NEMA11 100mm linear lead-screw slides**. A native **macOS SwiftUI app** lets you jog sliders left/right, set speed, home them, and optionally show an IP camera feed alongside each one. Only one slider moves at a time.
 
 ---
 
@@ -11,86 +11,78 @@ An **Arduino Uno R4 WiFi** + **TB6600 driver** controls a **NEMA11 50mm linear l
 | Item | Notes |
 |---|---|
 | Arduino Uno R4 WiFi (ABX00087) | Built-in WiFi — no shield needed |
-| TB6600 stepper driver (×2) | 4A, 9–42V; one per slider |
-| NEMA11 50mm linear slide (24V, 1.8°) | CNC lead-screw slide, T-shaped screw |
-| 24V 5A wall adapter (5.5mm × 2.5mm barrel jack) | AC 100–240V to DC 24V 5A; powers both sliders |
-| HiLetgo KW12-3 roller lever microswitches (×10 pack) | SPDT, AC 250V 5A; 2 per slider, plenty of spares |
-| 100µF 50V electrolytic capacitor | Across TB6600 V+/GND — absorbs voltage spikes during deceleration, protects the driver |
-| TP-Link Tapo C110 IP camera | IR night vision, WiFi, RTSP stream; one per slider for mic position monitoring |
-| Dupont jumper wires | Arduino → TB6600 signal wiring |
-| Adafruit Motor Shield v2 | **Not used** — underpowered for 24V; TB6600 is wired direct to Arduino |
+| Adafruit Motor Shield v2 (×3) | Stacked via I2C; controls 2 steppers each = 6 total |
+| NEMA11 linear slide, T6x1, 100mm (×6) | 28mm flange, 1mm pitch, 0.6A, 1.8° step angle |
+| 12V 10A power supply | Powers all 3 Motor Shields; 7–8V preferred to keep current near motor's 0.6A rating |
+| HiLetgo KW12-3 roller lever microswitches (×10 pack) | SPDT; 2 per slider for homing |
+| TP-Link Tapo C110 IP camera | IR night vision, WiFi, RTSP stream; one per slider (optional) |
+| Dupont jumper wires | Limit switch wiring |
+
+---
+
+## Motor Shield Stacking (I2C Address Configuration)
+
+Solder address jumpers on the Motor Shield PCB before stacking:
+
+| Shield | Address | Jumper |
+|---|---|---|
+| Shield 1 (bottom) | 0x60 | No jumpers (default) |
+| Shield 2 (middle) | 0x61 | Solder **A0** |
+| Shield 3 (top) | 0x62 | Solder **A1** |
+
+Stack all three on the Arduino. They share SDA/SCL (I2C). No other connections needed between shields.
+
+### Motor assignments
+
+| Slider | Shield | Port |
+|---|---|---|
+| 1 | Shield 1 (0x60) | M1/M2 |
+| 2 | Shield 1 (0x60) | M3/M4 |
+| 3 | Shield 2 (0x61) | M1/M2 |
+| 4 | Shield 2 (0x61) | M3/M4 |
+| 5 | Shield 3 (0x62) | M1/M2 |
+| 6 | Shield 3 (0x62) | M3/M4 |
+
+Connect the 4 motor wires (Red=A+, Blue=A−, Green=B+, Black=B−) to each Motor Shield terminal block.
 
 ---
 
 ## Wiring
 
-### TB6600 → Arduino (single-ended mode)
-
-Both sliders connect to the same Arduino. Each TB6600 gets its own STEP/DIR pins.
-
-| TB6600 terminal | Slider 1 | Slider 2 |
-|---|---|---|
-| PUL+ | Pin 3 (STEP) | Pin 8 (STEP) |
-| PUL− | GND | GND |
-| DIR+ | Pin 4 (DIR) | Pin 9 (DIR) |
-| DIR− | GND | GND |
-| ENA+ / ENA− | **Leave disconnected** | **Leave disconnected** |
-| VMOT | 24V supply + | 24V supply + |
-| GND | 24V supply − | 24V supply − |
-| A+/A−/B+/B− | NEMA11 motor coils | NEMA11 motor coils |
-
 ### Limit switches
 
-| Switch | Slider 1 | Slider 2 |
+| Slider | Left limit | Right limit |
 |---|---|---|
-| Left limit | Pin 6 | Pin 10 |
-| Right limit | Pin 7 | Pin 11 |
+| 1 | Pin 2 | Pin 3 |
+| 2 | Pin 4 | Pin 5 |
+| 3 | Pin 6 | Pin 7 |
+| 4 | Pin 8 | Pin 9 |
+| 5 | Pin 10 | Pin 11 |
+| 6 | Pin 12 | Pin 13 |
 
 Wire each switch between the pin and GND (INPUT_PULLUP: LOW = triggered).
 Use **COM** and **NC (normally closed)** terminals on each KW12-3. Leave NO unconnected.
 
 ### Power
 
-- **24V supply** → TB6600 VMOT/GND only
-- **Arduino** powered separately via USB or barrel jack (do not connect 24V to Arduino)
+- **12V supply** → Motor Shield power terminals (M+ / GND screw block on bottom shield)
+- **Arduino** powered separately via USB or barrel jack
 
-#### Connecting the wall adapter to the TB6600
-
-The supply has a 5.5mm × 2.5mm barrel jack — cut it off and connect bare wires to the TB6600 screw terminals:
-
-- **Center conductor → TB6600 V+**
-- **Outer conductor → TB6600 GND**
-
-Strip ~5–6mm of insulation, insert into terminals, tighten. Double-check polarity before powering on — reversing it will damage the TB6600.
+> **Note on voltage:** The NEMA11 motors are rated 0.6A. The Motor Shield v2 has no adjustable current limiting. At 12V the peak static current can exceed the motor rating and generate heat. A 7–8V supply better matches the 0.6A rating. The firmware releases motor coils after each move — the T6x1 lead screw is self-locking and will not back-drive.
 
 ---
 
-## Microstepping (TB6600 DIP switches)
+## Slide Specs & Step Math
 
-Set on the TB6600 hardware — not in firmware. Recommended: **1/8 step**.
+| Spec | Value |
+|---|---|
+| Lead screw | T6x1 (1mm pitch — carriage moves 1mm per motor revolution) |
+| Steps/revolution | 200 (1.8° step angle, DOUBLE mode) |
+| Steps/mm | 200 |
+| Full travel (100mm) | **20,000 steps** |
+| Positioning accuracy | ±0.1mm (±20 steps) |
 
-| Microstepping | SW1 | SW2 | SW3 | Steps/rev |
-|---|---|---|---|---|
-| Full | OFF | OFF | OFF | 200 |
-| 1/2 | ON | OFF | OFF | 400 |
-| 1/4 | OFF | ON | OFF | 800 |
-| **1/8** | **ON** | **ON** | **OFF** | **1600** |
-| 1/16 | OFF | OFF | ON | 3200 |
-
-> Note: DIP switch labeling varies by TB6600 unit — check your specific board's manual.
-
-### MAX_STEPS calibration (50mm slide)
-
-Lead screw pitch on these NEMA11 slides is typically **2mm/revolution**.
-
-| Microstepping | Steps/rev | Steps/mm | Full 50mm travel |
-|---|---|---|---|
-| Full | 200 | 100 | 5,000 |
-| 1/2 | 400 | 200 | 10,000 |
-| 1/4 | 800 | 400 | 20,000 |
-| **1/8** | **1600** | **800** | **40,000** |
-
-`MAX_STEPS` in `config.h` is set to `40000` (1/8 step, 2mm pitch). **Verify against your actual hardware** — jog to one end, home, jog to the other end, and read the position from `/status`.
+`MAX_STEPS` in `config.h` is set to `20000`. Verify against your actual hardware after first homing run.
 
 ---
 
@@ -100,7 +92,9 @@ Lead screw pitch on these NEMA11 slides is typically **2mm/revolution**.
 
 1. **Boards Manager** → install **"Arduino UNO R4 Boards"**
 2. Select board: **Arduino UNO R4 WiFi**
-3. **Library Manager** → install **AccelStepper** by Mike McCauley
+3. **Library Manager** → install:
+   - **Adafruit Motor Shield V2 Library** by Adafruit
+   - **AccelStepper** by Mike McCauley
 4. `WiFiS3` ships with the R4 board package — no separate install
 
 ### Configuration (`firmware/config.h`)
@@ -108,8 +102,8 @@ Lead screw pitch on these NEMA11 slides is typically **2mm/revolution**.
 ```cpp
 #define WIFI_SSID   "YourSSID"
 #define WIFI_PASS   "YourPassword"
-#define STATIC_IP   IPAddress(192, 168, 1, 42)
-#define GATEWAY_IP  IPAddress(192, 168, 1,  1)
+#define STATIC_IP   IPAddress(10, 0, 0, 42)
+#define GATEWAY_IP  IPAddress(10, 0, 0,  1)
 #define SUBNET_MASK IPAddress(255, 255, 255, 0)
 ```
 
@@ -119,16 +113,24 @@ Static IP is strongly recommended — avoids DHCP delays and keeps app config st
 
 ## HTTP Endpoints
 
-All `GET`, JSON responses.
+All `GET`, JSON responses. All endpoints accept `?slider=1` through `?slider=6` (default: 1).
 
 | Endpoint | Action |
 |---|---|
-| `GET /status` | `{"pos":0,"moving":false,"maxSteps":40000,"jogDir":"none","homing":false,"speed":1600}` |
+| `GET /status` | `{"slider":1,"pos":0,"moving":false,"maxSteps":20000,"jogDir":"none","homing":false,"speed":2000}` |
 | `GET /move?dir=left&steps=200` | Move N steps (`left` or `right`) |
 | `GET /jog/start?dir=left` | Begin continuous movement |
 | `GET /jog/stop` | Stop immediately |
 | `GET /home` | Run left to limit switch, zero position |
-| `GET /speed?val=1600` | Set max speed (steps/sec, 1–10000) |
+| `GET /speed?val=1600` | Set max speed (steps/sec, 100–3000) |
+
+---
+
+## Position Persistence (EEPROM)
+
+The firmware saves each slider's position to Arduino EEPROM after every move. On power-up, positions are restored — homing is not required every session. 6 sliders × 4 bytes = 24 bytes used.
+
+The macOS app also stores `lastKnownPosition` per slider in UserDefaults and displays it even when the slider is offline.
 
 ---
 
@@ -138,22 +140,23 @@ All `GET`, JSON responses.
 
 Open `MicSlider/MicSlider.xcodeproj` → select **My Mac** → ⌘R.
 
-Click **+** in the sidebar to add a slider by name and IP address.
+Click **+** in the sidebar to add a slider by name, IP address, and channel (1–6).
 
 ### UI
 
 ```
 ┌─────────────────┬──────────────────────────────────────┐
 │  Sliders        │  Stage Left Mic                      │
-│  ─────────      │  IP: 192.168.1.42  [●] Connected     │
-│  Stage Left Mic │                                      │
-│  + Add Slider   │  Position: ▓▓▓▓▓░░░░░  4200/40000   │
+│  ─────────      │  IP: 10.0.0.42:8080  ·  Slider 1    │
+│  Stage Left Mic │  [●] Connected                       │
+│  + Add Slider   │                                      │
+│                 │  Position: ▓▓▓▓▓░░░░░  4200/20000   │
 │                 │                                      │
 │                 │  [◄◄ LEFT]          [RIGHT ►►]       │
 │                 │  tap = step, hold = continuous jog   │
 │                 │                                      │
 │                 │  Step size:  Fine | Med | Coarse      │
-│                 │  Speed: ────●──────── 1600 steps/s   │
+│                 │  Speed: ────●──────── 2000 steps/s   │
 │                 │                                      │
 │                 │  [⌂ Home]                            │
 │                 │                                      │
@@ -161,11 +164,11 @@ Click **+** in the sidebar to add a slider by name and IP address.
 └─────────────────┴──────────────────────────────────────┘
 ```
 
-- **Tap** → moves by step size (Fine=50, Med=200, Coarse=800 steps)
+- **Tap** → moves by step size (Fine=800, Med=2000, Coarse=4000 steps)
 - **Long press** → continuous jog; **Stop** button appears while moving
 - **Speed** slider sends `/speed` to Arduino on release
-- **Status** polled every 2 seconds
-- Config persists to `UserDefaults` across launches
+- **Status** polled after each move (calculated delay, no continuous polling)
+- Config and last known position persist to `UserDefaults` across launches
 
 ---
 
@@ -173,39 +176,33 @@ Click **+** in the sidebar to add a slider by name and IP address.
 
 ```bash
 # Firmware responding
-curl http://10.0.0.126:8080/status
+curl http://10.0.0.42:8080/status?slider=1
 
-# Move right 500 steps
-curl "http://10.0.0.126:8080/move?dir=right&steps=500"
+# Move right 200 steps
+curl "http://10.0.0.42:8080/move?dir=right&steps=200&slider=1"
 
 # Jog left, then stop
-curl "http://10.0.0.126:8080/jog/start?dir=left"
-curl "http://10.0.0.126:8080/jog/stop"
+curl "http://10.0.0.42:8080/jog/start?dir=left&slider=1"
+curl "http://10.0.0.42:8080/jog/stop?slider=1"
 
-# Home (runs to left limit switch, zeros position)
-curl http://10.0.0.126:8080/home
+# Home slider 1
+curl "http://10.0.0.42:8080/home?slider=1"
 
 # Change speed
-curl "http://10.0.0.126:8080/speed?val=800"
+curl "http://10.0.0.42:8080/speed?val=1500&slider=1"
 ```
-
----
-
-## Scaling to Multiple Sliders
-
-Both sliders run on a single Arduino R4 WiFi. Add each slider in the app sidebar pointing to the same IP, selecting Channel 1 or Channel 2. Two TB6600 drivers share the same 24V 5A supply. All endpoints accept `?slider=1` or `?slider=2` (default: 1).
 
 ---
 
 ## Roadmap
 
-- [x] Order 24V 5A power supply (24V 5A wall adapter, 5.5mm × 2.5mm — cut barrel jack, wire direct to TB6600)
-- [x] Order limit switches (HiLetgo KW12-3 roller lever, 10-pack)
-- [x] Order 100µF 50V electrolytic capacitor (across TB6600 V+/GND)
-- [x] Order TP-Link Tapo C110 IP camera (IR, WiFi, RTSP stream)
-- [x] Flash firmware, connect to WiFi, verify with `curl /status` — IP: 10.0.0.126:8080 (MAC: 3c:dc:75:f0:46:94, DHCP reservation on Nighthawk; Mac must be on "fiddlehouse" network, not AT&T modem WiFi)
-- [ ] Wire TB6600 + limit switches, test homing
-- [ ] Calibrate `MAX_STEPS` against actual slide travel
-- [x] Build macOS app in Xcode, add slider by IP, verify jog end-to-end
-- [ ] Add second slider
-- [ ] Update CameraFeedView to handle Tapo C110 RTSP stream (AVFoundation or Tapo HTTP substream URL)
+- [x] Flash firmware, verify WiFi — IP: 10.0.0.42:8080
+- [x] Build macOS app, verify jog end-to-end
+- [x] Dual slider support (2 sliders, 1 Arduino)
+- [x] Redesign for 3× Motor Shield v2 + 6× NEMA11 T6x1 100mm slides
+- [ ] Order/receive 6 slides (ordered 2 to test first)
+- [ ] Wire Motor Shields, flash new firmware, verify all 6 channels
+- [ ] Wire limit switches, test homing
+- [ ] Calibrate MAX_STEPS against actual slide travel
+- [ ] Update CameraFeedView for Tapo C110 RTSP stream (AVFoundation)
+- [ ] Add 6 Tapo C110 cameras (one per slider)

@@ -8,9 +8,10 @@ struct SliderConfig: Identifiable, Codable, Hashable {
     var name: String
     var ipAddress: String
     var port: Int = 8080
-    var channel: Int = 1      // 1 or 2 — which slider on the Arduino
+    var channel: Int = 1          // 1–6 — which slider on the Arduino
     var cameraURL: String? = nil
-    var maxSteps: Int = 40000
+    var maxSteps: Int = 20000
+    var lastKnownPosition: Int? = nil  // persisted across launches, shown when offline
 }
 
 // MARK: - SliderStore

@@ -1,282 +1,326 @@
-// mic-slider.ino
-// Arduino Uno R4 WiFi (ABX00087) + 2× TB6600 driver + 2× NEMA11 50mm linear slide
+// mic-slider.ino — WiFi mic slider controller
+// Arduino Uno R4 WiFi + 3× Adafruit Motor Shield v2 (stacked, 0x60/0x61/0x62)
+// 6× NEMA11 T6x1 linear slide: 1mm pitch, 200 steps/mm, 100mm travel
 //
 // Libraries (install via Arduino Library Manager):
-//   - AccelStepper by Mike McCauley
-//   - WiFiS3 is included with the Arduino UNO R4 board package (no install needed)
+//   - Adafruit Motor Shield V2 Library (by Adafruit)
+//   - AccelStepper (by Mike McCauley)
 //
-// HTTP endpoints (all GET) — add ?slider=1 or ?slider=2 (default: 1):
-//   GET /status?slider=1                      → {"pos":0,"moving":false,...}
-//   GET /move?slider=1&dir=left&steps=200     → move N steps
-//   GET /jog/start?slider=1&dir=left          → begin continuous movement
-//   GET /jog/stop?slider=1                    → stop immediately
-//   GET /home?slider=1                        → run to left limit switch, zero position
-//   GET /speed?slider=1&val=8000              → set max speed (steps/sec)
+// HTTP endpoints (all GET, JSON, ?slider=1..6):
+//   GET /status      — current state
+//   GET /move        — move N steps left or right
+//   GET /jog/start   — continuous movement until /jog/stop or limit hit
+//   GET /jog/stop    — stop with deceleration
+//   GET /home        — run left to limit switch, zero position
+//   GET /speed       — set max speed (steps/sec, 100–3000)
 
 #include <WiFiS3.h>
 #include <AccelStepper.h>
+#include <Adafruit_MotorShield.h>
+#include <Wire.h>
+#include <EEPROM.h>
 #include "config.h"
 
-// ── Server ────────────────────────────────────────────────────────────────────
+// ── Motor Shields (3 stacked) ─────────────────────────────────────────────────
+Adafruit_MotorShield shields[3] = {
+    Adafruit_MotorShield(0x60),
+    Adafruit_MotorShield(0x61),
+    Adafruit_MotorShield(0x62)
+};
+Adafruit_StepperMotor *mtr[NUM_SLIDERS];
+
+// ── Step callbacks ────────────────────────────────────────────────────────────
+// AccelStepper requires plain function pointers — one forward/backward pair per motor.
+// FORWARD = positive position (right, away from home)
+// BACKWARD = negative position (left, toward home limit switch)
+void s0f(){mtr[0]->onestep(FORWARD, DOUBLE);}  void s0b(){mtr[0]->onestep(BACKWARD,DOUBLE);}
+void s1f(){mtr[1]->onestep(FORWARD, DOUBLE);}  void s1b(){mtr[1]->onestep(BACKWARD,DOUBLE);}
+void s2f(){mtr[2]->onestep(FORWARD, DOUBLE);}  void s2b(){mtr[2]->onestep(BACKWARD,DOUBLE);}
+void s3f(){mtr[3]->onestep(FORWARD, DOUBLE);}  void s3b(){mtr[3]->onestep(BACKWARD,DOUBLE);}
+void s4f(){mtr[4]->onestep(FORWARD, DOUBLE);}  void s4b(){mtr[4]->onestep(BACKWARD,DOUBLE);}
+void s5f(){mtr[5]->onestep(FORWARD, DOUBLE);}  void s5b(){mtr[5]->onestep(BACKWARD,DOUBLE);}
+
+// ── AccelStepper instances ────────────────────────────────────────────────────
+AccelStepper steppers[NUM_SLIDERS] = {
+    AccelStepper(s0f, s0b),
+    AccelStepper(s1f, s1b),
+    AccelStepper(s2f, s2b),
+    AccelStepper(s3f, s3b),
+    AccelStepper(s4f, s4b),
+    AccelStepper(s5f, s5b)
+};
+
+// ── Per-slider state ──────────────────────────────────────────────────────────
+enum class JogDir { NONE, LEFT, RIGHT };
+JogDir jogDir[NUM_SLIDERS]    = {};
+bool   homing[NUM_SLIDERS]    = {};
+float  maxSpeed[NUM_SLIDERS];
+bool   wasRunning[NUM_SLIDERS] = {};
+
+// ── WiFi & HTTP server ────────────────────────────────────────────────────────
 WiFiServer server(HTTP_PORT);
 
-// ── Steppers ──────────────────────────────────────────────────────────────────
-AccelStepper stepper0(AccelStepper::DRIVER, STEP_PIN_1, DIR_PIN_1);
-AccelStepper stepper1(AccelStepper::DRIVER, STEP_PIN_2, DIR_PIN_2);
-AccelStepper* const steppers[2] = { &stepper0, &stepper1 };
+// ─────────────────────────────────────────────────────────────────────────────
+// EEPROM helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── State (per slider) ────────────────────────────────────────────────────────
-enum class JogDir { NONE, LEFT, RIGHT };
-JogDir jogDir[2]       = { JogDir::NONE, JogDir::NONE };
-bool   homing[2]       = { false, false };
-int    currentMaxSpeed[2] = { DEFAULT_MAX_SPEED, DEFAULT_MAX_SPEED };
-
-// ── Limit switches ────────────────────────────────────────────────────────────
-
-bool limitLeft(int i)  { return digitalRead(i == 0 ? LIMIT_LEFT_1  : LIMIT_LEFT_2)  == LOW; }
-bool limitRight(int i) { return digitalRead(i == 0 ? LIMIT_RIGHT_1 : LIMIT_RIGHT_2) == LOW; }
-
-// ── Stop ──────────────────────────────────────────────────────────────────────
-
-void stopMotor(int i) {
-  steppers[i]->stop();
-  unsigned long t = millis();
-  while (steppers[i]->isRunning() && millis() - t < 200) steppers[i]->run();
-  jogDir[i] = JogDir::NONE;
-  homing[i] = false;
+void savePosition(int i) {
+    long pos = steppers[i].currentPosition();
+    EEPROM.put(EEPROM_POS_ADDR + i * 4, pos);
 }
 
-// ── Query-string parser ───────────────────────────────────────────────────────
-
-String getParam(const String& query, const String& key) {
-  String search = key + "=";
-  int start = query.indexOf(search);
-  if (start == -1) return "";
-  start += search.length();
-  int end = query.indexOf('&', start);
-  return (end == -1) ? query.substring(start) : query.substring(start, end);
+void loadPositions() {
+    byte magic;
+    EEPROM.get(EEPROM_MAGIC_ADDR, magic);
+    if (magic != (byte)EEPROM_MAGIC_VAL) {
+        // First boot — initialize all positions to 0
+        for (int i = 0; i < NUM_SLIDERS; i++) {
+            steppers[i].setCurrentPosition(0);
+            savePosition(i);
+        }
+        EEPROM.put(EEPROM_MAGIC_ADDR, (byte)EEPROM_MAGIC_VAL);
+        return;
+    }
+    for (int i = 0; i < NUM_SLIDERS; i++) {
+        long pos;
+        EEPROM.get(EEPROM_POS_ADDR + i * 4, pos);
+        pos = constrain(pos, 0L, (long)MAX_STEPS);
+        steppers[i].setCurrentPosition(pos);
+    }
 }
 
-// Returns 0-based slider index from ?slider=1 or ?slider=2 (default: 0)
-int sliderIdx(const String& query) {
-  String s = getParam(query, "slider");
-  return (s == "2") ? 1 : 0;
+// ─────────────────────────────────────────────────────────────────────────────
+// Limit switches
+// ─────────────────────────────────────────────────────────────────────────────
+bool limitLeft(int i)  { return digitalRead(LIMIT_LEFT_PINS[i])  == LOW; }
+bool limitRight(int i) { return digitalRead(LIMIT_RIGHT_PINS[i]) == LOW; }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HTTP helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+int queryInt(const String &query, const char *key) {
+    String k = String("?") + key + "=";
+    int idx = query.indexOf(k);
+    if (idx < 0) { k = String("&") + key + "="; idx = query.indexOf(k); }
+    if (idx < 0) return -1;
+    return query.substring(idx + k.length()).toInt();
 }
 
-// ── JSON status ───────────────────────────────────────────────────────────────
+String queryStr(const String &query, const char *key) {
+    String k = String("?") + key + "=";
+    int idx = query.indexOf(k);
+    if (idx < 0) { k = String("&") + key + "="; idx = query.indexOf(k); }
+    if (idx < 0) return "";
+    String val = query.substring(idx + k.length());
+    int amp = val.indexOf('&');
+    if (amp >= 0) val = val.substring(0, amp);
+    return val;
+}
+
+// API uses 1-indexed sliders; convert to 0-indexed internally
+int sliderIdx(const String &query) {
+    int n = queryInt(query, "slider");
+    if (n < 1 || n > NUM_SLIDERS) return 0;
+    return n - 1;
+}
+
+void sendOK(WiFiClient &client, const String &body) {
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: application/json");
+    client.println("Connection: close");
+    client.println();
+    client.println(body);
+}
 
 String statusJSON(int i) {
-  String j = "{\"pos\":";
-  j += steppers[i]->currentPosition();
-  j += ",\"moving\":";
-  j += steppers[i]->isRunning() ? "true" : "false";
-  j += ",\"maxSteps\":";
-  j += MAX_STEPS;
-  j += ",\"slider\":";
-  j += (i + 1);
-  j += ",\"jogDir\":\"";
-  j += (jogDir[i] == JogDir::LEFT  ? "left"  :
-        jogDir[i] == JogDir::RIGHT ? "right" : "none");
-  j += "\",\"homing\":";
-  j += homing[i] ? "true" : "false";
-  j += ",\"speed\":";
-  j += currentMaxSpeed[i];
-  j += "}";
-  return j;
+    String dir = "none";
+    if (jogDir[i] == JogDir::LEFT)  dir = "left";
+    if (jogDir[i] == JogDir::RIGHT) dir = "right";
+    return String("{\"slider\":") + (i + 1) +
+           ",\"pos\":"      + steppers[i].currentPosition() +
+           ",\"moving\":"   + (steppers[i].isRunning() ? "true" : "false") +
+           ",\"maxSteps\":" + MAX_STEPS +
+           ",\"jogDir\":\""  + dir + "\"" +
+           ",\"homing\":"   + (homing[i] ? "true" : "false") +
+           ",\"speed\":"    + (int)maxSpeed[i] +
+           "}";
 }
 
-// ── HTTP helpers ──────────────────────────────────────────────────────────────
-
-void sendJSON(WiFiClient& client, int code, const String& body) {
-  client.print("HTTP/1.1 ");
-  client.print(code);
-  client.println(code == 200 ? " OK" : " Error");
-  client.println("Content-Type: application/json");
-  client.println("Connection: close");
-  client.print("Content-Length: ");
-  client.println(body.length());
-  client.println();
-  client.print(body);
-}
-
-void sendError(WiFiClient& client, int code, const String& msg) {
-  sendJSON(client, code, "{\"error\":\"" + msg + "\"}");
-}
-
-// ── Route handlers ────────────────────────────────────────────────────────────
-
-void handleStatus(WiFiClient& client, const String& query) {
-  sendJSON(client, 200, statusJSON(sliderIdx(query)));
-}
-
-void handleMove(WiFiClient& client, const String& query) {
-  int i = sliderIdx(query);
-  String dir   = getParam(query, "dir");
-  String steps = getParam(query, "steps");
-  if (dir.isEmpty() || steps.isEmpty()) { sendError(client, 400, "Missing dir or steps"); return; }
-  long n = steps.toInt();
-  if (n <= 0) { sendError(client, 400, "Invalid steps"); return; }
-
-  homing[i] = false;
-  jogDir[i]  = JogDir::NONE;
-  steppers[i]->move(dir == "left" ? -n : n);
-  sendJSON(client, 200, statusJSON(i));
-}
-
-void handleJogStart(WiFiClient& client, const String& query) {
-  int i = sliderIdx(query);
-  String dir = getParam(query, "dir");
-  if (dir.isEmpty()) { sendError(client, 400, "Missing dir"); return; }
-
-  homing[i] = false;
-  if (dir == "left") {
-    jogDir[i] = JogDir::LEFT;
-    steppers[i]->move(-1000000L);
-  } else {
-    jogDir[i] = JogDir::RIGHT;
-    steppers[i]->move(1000000L);
-  }
-  sendJSON(client, 200, statusJSON(i));
-}
-
-void handleJogStop(WiFiClient& client, const String& query) {
-  int i = sliderIdx(query);
-  stopMotor(i);
-  sendJSON(client, 200, statusJSON(i));
-}
-
-void handleHome(WiFiClient& client, const String& query) {
-  int i = sliderIdx(query);
-  homing[i] = true;
-  jogDir[i]  = JogDir::NONE;
-  steppers[i]->setMaxSpeed(HOME_SPEED);
-  steppers[i]->move(-1000000L);
-  sendJSON(client, 200, statusJSON(i));
-}
-
-void handleSpeed(WiFiClient& client, const String& query) {
-  int i = sliderIdx(query);
-  String val = getParam(query, "val");
-  if (val.isEmpty()) { sendError(client, 400, "Missing val"); return; }
-  int spd = val.toInt();
-  if (spd < 1 || spd > 20000) { sendError(client, 400, "Speed out of range"); return; }
-  currentMaxSpeed[i] = spd;
-  steppers[i]->setMaxSpeed(spd);
-  sendJSON(client, 200, statusJSON(i));
-}
-
-// ── HTTP dispatcher ───────────────────────────────────────────────────────────
-
-void handleRequest(WiFiClient& client) {
-  String requestLine = "";
-  String currentLine = "";
-  bool firstLine = true;
-  unsigned long t = millis();
-
-  while (client.connected() && millis() - t < 3000) {
-    stepper0.run();
-    stepper1.run();
-    if (client.available()) {
-      char c = client.read();
-      if (c == '\n') {
-        if (firstLine) { requestLine = currentLine; firstLine = false; }
-        if (currentLine.length() == 0 || currentLine == "\r") break;
-        currentLine = "";
-      } else if (c != '\r') {
-        currentLine += c;
-      }
-    }
-  }
-
-  requestLine.trim();
-  int firstSpace  = requestLine.indexOf(' ');
-  int secondSpace = requestLine.lastIndexOf(' ');
-  if (firstSpace == -1 || secondSpace == -1 || firstSpace == secondSpace) {
-    sendError(client, 400, "Bad request"); return;
-  }
-
-  String method   = requestLine.substring(0, firstSpace);
-  String fullPath = requestLine.substring(firstSpace + 1, secondSpace);
-
-  if (method != "GET") { sendError(client, 405, "Method not allowed"); return; }
-
-  int qmark    = fullPath.indexOf('?');
-  String path  = (qmark == -1) ? fullPath : fullPath.substring(0, qmark);
-  String query = (qmark == -1) ? ""       : fullPath.substring(qmark + 1);
-
-  if      (path == "/status")    handleStatus(client, query);
-  else if (path == "/move")      handleMove(client, query);
-  else if (path == "/jog/start") handleJogStart(client, query);
-  else if (path == "/jog/stop")  handleJogStop(client, query);
-  else if (path == "/home")      handleHome(client, query);
-  else if (path == "/speed")     handleSpeed(client, query);
-  else                           sendError(client, 404, "Not found");
-}
-
-// ── Setup ─────────────────────────────────────────────────────────────────────
-
-void setup() {
-  Serial.begin(115200);
-  while (!Serial && millis() < 3000);
-
-  pinMode(LIMIT_LEFT_1,  INPUT_PULLUP);
-  pinMode(LIMIT_RIGHT_1, INPUT_PULLUP);
-  pinMode(LIMIT_LEFT_2,  INPUT_PULLUP);
-  pinMode(LIMIT_RIGHT_2, INPUT_PULLUP);
-
-  for (int i = 0; i < 2; i++) {
-    steppers[i]->setMaxSpeed(DEFAULT_MAX_SPEED);
-    steppers[i]->setAcceleration(DEFAULT_ACCEL);
-  }
-
-  WiFi.config(IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0));
-  Serial.print("Connecting to ");
-  Serial.println(WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
-  while (WiFi.localIP() == IPAddress(0, 0, 0, 0)) { delay(500); Serial.print("d"); }
-  Serial.println();
-  Serial.print("IP: ");
-  Serial.println(WiFi.localIP());
-
-  server.begin();
-  Serial.println("HTTP server started");
-}
-
-// ── Loop ──────────────────────────────────────────────────────────────────────
-
-void loop() {
-  // ── HTTP ──────────────────────────────────────────────────────────────────
-  static unsigned long lastWiFiCheck = 0;
-  unsigned long now = millis();
-  if (now - lastWiFiCheck >= 50) {
-    lastWiFiCheck = now;
-    WiFiClient client = server.available();
-    if (client) {
-      handleRequest(client);
-      client.stop();
-    }
-  }
-
-  // ── Limit switch safety (both sliders) ────────────────────────────────────
-  for (int i = 0; i < 2; i++) {
-    if (steppers[i]->isRunning()) {
-      if ((jogDir[i] == JogDir::LEFT || homing[i]) && limitLeft(i)) {
-        steppers[i]->stop();
-        if (homing[i]) {
-          steppers[i]->setCurrentPosition(0);
-          steppers[i]->setMaxSpeed(currentMaxSpeed[i]);
-          homing[i] = false;
+// ─────────────────────────────────────────────────────────────────────────────
+// Request handler
+// ─────────────────────────────────────────────────────────────────────────────
+void handleRequest(WiFiClient &client) {
+    String request = "";
+    unsigned long t = millis();
+    while (client.connected() && millis() - t < 1000) {
+        if (client.available()) {
+            char c = client.read();
+            request += c;
+            if (request.endsWith("\r\n\r\n")) break;
+            // Keep steppers running while reading to prevent starvation
+            for (int i = 0; i < NUM_SLIDERS; i++) steppers[i].run();
         }
-        jogDir[i] = JogDir::NONE;
-      }
-      if (jogDir[i] == JogDir::RIGHT && limitRight(i)) {
-        steppers[i]->stop();
-        jogDir[i] = JogDir::NONE;
-      }
     }
-  }
 
-  stepper0.run();
-  stepper1.run();
+    int sp1 = request.indexOf(' ');
+    int sp2 = request.indexOf(' ', sp1 + 1);
+    if (sp1 < 0 || sp2 < 0) return;
+    String pathQ = request.substring(sp1 + 1, sp2);
+    int qIdx     = pathQ.indexOf('?');
+    String path  = (qIdx >= 0) ? pathQ.substring(0, qIdx) : pathQ;
+    String query = (qIdx >= 0) ? pathQ.substring(qIdx)    : "";
+
+    int i = sliderIdx(query);
+
+    if (path == "/status") {
+        sendOK(client, statusJSON(i));
+
+    } else if (path == "/move") {
+        String dir = queryStr(query, "dir");
+        int steps  = queryInt(query, "steps");
+        if (steps <= 0) steps = 200;
+        long target = steppers[i].currentPosition() +
+                      (dir == "left" ? -(long)steps : (long)steps);
+        target = constrain(target, 0L, (long)MAX_STEPS);
+        steppers[i].setMaxSpeed(maxSpeed[i]);
+        steppers[i].moveTo(target);
+        jogDir[i] = JogDir::NONE;
+        homing[i] = false;
+        sendOK(client, statusJSON(i));
+
+    } else if (path == "/jog/start") {
+        String dir = queryStr(query, "dir");
+        steppers[i].setMaxSpeed(maxSpeed[i]);
+        if (dir == "left") {
+            steppers[i].moveTo(-(long)MAX_STEPS * 2);
+            jogDir[i] = JogDir::LEFT;
+        } else {
+            steppers[i].moveTo((long)MAX_STEPS * 2);
+            jogDir[i] = JogDir::RIGHT;
+        }
+        homing[i] = false;
+        sendOK(client, statusJSON(i));
+
+    } else if (path == "/jog/stop") {
+        steppers[i].stop();
+        jogDir[i] = JogDir::NONE;
+        homing[i] = false;
+        sendOK(client, statusJSON(i));
+
+    } else if (path == "/home") {
+        steppers[i].setMaxSpeed(HOME_SPEED);
+        steppers[i].moveTo(-(long)MAX_STEPS * 2);
+        jogDir[i] = JogDir::LEFT;
+        homing[i] = true;
+        sendOK(client, statusJSON(i));
+
+    } else if (path == "/speed") {
+        int val = queryInt(query, "val");
+        if (val > 0) {
+            maxSpeed[i] = constrain((float)val, 100.0f, 3000.0f);
+            if (!homing[i]) steppers[i].setMaxSpeed(maxSpeed[i]);
+        }
+        sendOK(client, statusJSON(i));
+
+    } else {
+        client.println("HTTP/1.1 404 Not Found");
+        client.println("Connection: close");
+        client.println();
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Setup
+// ─────────────────────────────────────────────────────────────────────────────
+void setup() {
+    Serial.begin(115200);
+
+    // Limit switches
+    for (int i = 0; i < NUM_SLIDERS; i++) {
+        pinMode(LIMIT_LEFT_PINS[i],  INPUT_PULLUP);
+        pinMode(LIMIT_RIGHT_PINS[i], INPUT_PULLUP);
+    }
+
+    // Motor Shields
+    for (int s = 0; s < 3; s++) {
+        shields[s].begin();
+    }
+
+    // Assign motors: shield 0 → sliders 0,1 | shield 1 → sliders 2,3 | shield 2 → sliders 4,5
+    mtr[0] = shields[0].getStepper(200, 1);
+    mtr[1] = shields[0].getStepper(200, 2);
+    mtr[2] = shields[1].getStepper(200, 1);
+    mtr[3] = shields[1].getStepper(200, 2);
+    mtr[4] = shields[2].getStepper(200, 1);
+    mtr[5] = shields[2].getStepper(200, 2);
+
+    // AccelStepper config
+    for (int i = 0; i < NUM_SLIDERS; i++) {
+        maxSpeed[i] = DEFAULT_MAX_SPEED;
+        steppers[i].setMaxSpeed(maxSpeed[i]);
+        steppers[i].setAcceleration(DEFAULT_ACCEL);
+    }
+
+    // Restore positions from EEPROM
+    loadPositions();
+
+    // WiFi
+    WiFi.config(STATIC_IP, GATEWAY_IP, SUBNET_MASK);
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+    while (WiFi.status() != WL_CONNECTED) delay(500);
+    server.begin();
+    Serial.print("IP: "); Serial.println(WiFi.localIP());
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main loop
+// ─────────────────────────────────────────────────────────────────────────────
+void loop() {
+    // Throttle WiFi polling to every 50ms — prevents TCP overhead from
+    // starving stepper callbacks (each step = one I2C transaction via Motor Shield)
+    static unsigned long lastWiFiCheck = 0;
+    unsigned long now = millis();
+    if (now - lastWiFiCheck >= 50) {
+        lastWiFiCheck = now;
+        WiFiClient client = server.available();
+        if (client) {
+            handleRequest(client);
+            client.stop();
+        }
+    }
+
+    // Run all steppers + limit switch checks
+    for (int i = 0; i < NUM_SLIDERS; i++) {
+        steppers[i].run();
+
+        if (steppers[i].isRunning()) {
+            // Left limit: stop, zero position, restore speed if homing
+            if ((jogDir[i] == JogDir::LEFT || homing[i]) && limitLeft(i)) {
+                steppers[i].stop();
+                steppers[i].setCurrentPosition(0);
+                if (homing[i]) {
+                    homing[i] = false;
+                    steppers[i].setMaxSpeed(maxSpeed[i]);
+                }
+                jogDir[i] = JogDir::NONE;
+            }
+            // Right limit: stop
+            if (jogDir[i] == JogDir::RIGHT && limitRight(i)) {
+                steppers[i].stop();
+                jogDir[i] = JogDir::NONE;
+            }
+        }
+
+        // Detect running → stopped transition: save position, release coils
+        // T6x1 lead screw is self-locking — slider will not drift without power
+        bool running = steppers[i].isRunning();
+        if (wasRunning[i] && !running) {
+            if (jogDir[i]  != JogDir::NONE) jogDir[i] = JogDir::NONE;
+            if (homing[i])  { homing[i] = false; steppers[i].setMaxSpeed(maxSpeed[i]); }
+            savePosition(i);
+            mtr[i]->release();
+        }
+        wasRunning[i] = running;
+    }
 }

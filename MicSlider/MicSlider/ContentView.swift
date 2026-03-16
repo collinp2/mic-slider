@@ -32,8 +32,12 @@ struct ContentView: View {
         } detail: {
             if let id = selectedID,
                let config = store.sliders.first(where: { $0.id == id }) {
-                SliderDetailView(config: config)
-                    .id(id) // force recreation when selection changes
+                SliderDetailView(config: config) { newPos in
+                    var updated = config
+                    updated.lastKnownPosition = newPos
+                    store.update(updated)
+                }
+                .id(id) // force recreation when selection changes
             } else {
                 VStack(spacing: 12) {
                     Image(systemName: "slider.horizontal.3")
@@ -90,8 +94,9 @@ struct AddSliderSheet: View {
                 TextField("IP Address", text: $ip, prompt: Text("10.0.0.126"))
                 TextField("Port", text: $port)
                 Picker("Channel", selection: $channel) {
-                    Text("Slider 1").tag(1)
-                    Text("Slider 2").tag(2)
+                    ForEach(1...6, id: \.self) { n in
+                        Text("Slider \(n)").tag(n)
+                    }
                 }
                 .pickerStyle(.segmented)
                 TextField("Camera URL (optional)", text: $cameraURL, prompt: Text("http://192.168.1.50/stream"))
