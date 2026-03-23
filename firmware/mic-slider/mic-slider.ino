@@ -20,6 +20,7 @@
 #include <Wire.h>
 #include <EEPROM.h>
 #include "config.h"
+#include "web_ui.h"
 
 // ── Motor Shields (3 stacked) ─────────────────────────────────────────────────
 Adafruit_MotorShield shields[3] = {
@@ -125,6 +126,20 @@ int sliderIdx(const String &query) {
     return n - 1;
 }
 
+void sendHTML(WiFiClient &client) {
+    client.println("HTTP/1.1 200 OK");
+    client.println("Content-Type: text/html; charset=utf-8");
+    client.println("Connection: close");
+    client.println();
+    // Send in 256-byte chunks — avoids overwhelming the WiFi TX buffer
+    const char *p = HTML_PAGE;
+    size_t len = strlen(HTML_PAGE);
+    size_t chunk = 256;
+    for (size_t i = 0; i < len; i += chunk) {
+        client.write((const uint8_t *)(p + i), min(chunk, len - i));
+    }
+}
+
 void sendOK(WiFiClient &client, const String &body) {
     client.println("HTTP/1.1 200 OK");
     client.println("Content-Type: application/json");
@@ -173,7 +188,10 @@ void handleRequest(WiFiClient &client) {
 
     int i = sliderIdx(query);
 
-    if (path == "/status") {
+    if (path == "/" || path == "/ui") {
+        sendHTML(client);
+
+    } else if (path == "/status") {
         sendOK(client, statusJSON(i));
 
     } else if (path == "/move") {
