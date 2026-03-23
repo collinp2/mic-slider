@@ -38,6 +38,14 @@ h2{text-align:center;font-size:1rem;color:#777;margin-bottom:10px;letter-spacing
 .spd-lbl{font-size:.85rem;color:#777;min-width:62px;text-align:right}
 .home-btn{width:100%;padding:14px;border:none;background:#2a2a2a;color:#ccc;border-radius:8px;font-size:1rem;cursor:pointer;touch-action:manipulation}
 .home-btn:active{background:#383838}
+.cam-toggle{width:100%;padding:11px;border:none;background:#2a2a2a;color:#aaa;border-radius:8px;font-size:.9rem;cursor:pointer;text-align:left;touch-action:manipulation}
+.cam-toggle:active{background:#333}
+.cam-body{display:none;margin-top:8px}
+.cam-body.open{display:block}
+.cam-body img{width:100%;border-radius:6px;background:#111;display:block}
+.cam-url-row{display:flex;gap:6px;margin-top:8px}
+.cam-url-row input{flex:1;padding:8px;background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;font-size:.8rem}
+.cam-url-row button{padding:8px 12px;border:none;background:#333;color:#ccc;border-radius:6px;cursor:pointer;font-size:.8rem;touch-action:manipulation}
 </style>
 </head>
 <body>
@@ -76,6 +84,16 @@ h2{text-align:center;font-size:1rem;color:#777;margin-bottom:10px;letter-spacing
 </div>
 <div class="card">
   <button class="home-btn" onclick="doHome()">&#8962; Home</button>
+</div>
+<div class="card">
+  <button class="cam-toggle" id="camToggle" onclick="toggleCam()">&#9654; Camera Feed</button>
+  <div class="cam-body" id="camBody">
+    <img id="camImg" src="" alt="Camera feed">
+    <div class="cam-url-row">
+      <input type="text" id="camUrl" placeholder="http://10.0.0.208:1984/api/stream.mjpeg?src=tapo">
+      <button onclick="saveCamUrl()">Set</button>
+    </div>
+  </div>
 </div>
 <script>
 var sl=1, steps=2000, poll=null, hold=null, isHold=false;
@@ -155,6 +173,27 @@ function wireBtn(btn, dir){
 }
 wireBtn(document.getElementById('lBtn'),'left');
 wireBtn(document.getElementById('rBtn'),'right');
+
+// Camera feed
+var camOpen = false;
+var CAM_KEY = 'micSliderCamUrl';
+var defaultCamUrl = 'http://10.0.0.208:1984/api/stream.mjpeg?src=tapo';
+
+function toggleCam(){
+  camOpen = !camOpen;
+  document.getElementById('camBody').classList.toggle('open', camOpen);
+  document.getElementById('camToggle').textContent = (camOpen ? '\u25BE' : '\u25B4') + ' Camera Feed';
+  if(camOpen){ loadCam(); }
+}
+function loadCam(){
+  var url = localStorage.getItem(CAM_KEY) || defaultCamUrl;
+  document.getElementById('camUrl').value = url;
+  document.getElementById('camImg').src = url;
+}
+function saveCamUrl(){
+  var url = document.getElementById('camUrl').value.trim();
+  if(url){ localStorage.setItem(CAM_KEY, url); document.getElementById('camImg').src = url; }
+}
 
 fetchStatus();
 setInterval(fetchStatus, 5000);
