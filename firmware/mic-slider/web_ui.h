@@ -42,7 +42,7 @@ h2{text-align:center;font-size:1rem;color:#777;margin-bottom:10px;letter-spacing
 .cam-toggle:active{background:#333}
 .cam-body{display:none;margin-top:8px}
 .cam-body.open{display:block}
-.cam-body img{width:100%;border-radius:6px;background:#111;display:block}
+.cam-body iframe{width:100%;height:240px;border:none;border-radius:6px;background:#111;display:block}
 .cam-url-row{display:flex;gap:6px;margin-top:8px}
 .cam-url-row input{flex:1;padding:8px;background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;font-size:.8rem}
 .cam-url-row button{padding:8px 12px;border:none;background:#333;color:#ccc;border-radius:6px;cursor:pointer;font-size:.8rem;touch-action:manipulation}
@@ -88,9 +88,9 @@ h2{text-align:center;font-size:1rem;color:#777;margin-bottom:10px;letter-spacing
 <div class="card">
   <button class="cam-toggle" id="camToggle" onclick="toggleCam()">&#9654; Camera Feed</button>
   <div class="cam-body" id="camBody">
-    <img id="camImg" src="" alt="Camera feed">
+    <iframe id="camFrame" src="" allowfullscreen></iframe>
     <div class="cam-url-row">
-      <input type="text" id="camUrl" placeholder="http://10.0.0.208:1984/api/stream.mjpeg?src=tapo">
+      <input type="text" id="camUrl" placeholder="http://10.0.0.208:1984/stream.html?src=tapo">
       <button onclick="saveCamUrl()">Set</button>
     </div>
   </div>
@@ -177,7 +177,7 @@ wireBtn(document.getElementById('rBtn'),'right');
 // Camera feed
 var camOpen = false;
 var CAM_KEY = 'micSliderCamUrl';
-var defaultCamUrl = 'http://10.0.0.208:1984/api/stream.mjpeg?src=tapo';
+var defaultCamUrl = 'http://10.0.0.208:1984/stream.html?src=tapo';
 
 function toggleCam(){
   camOpen = !camOpen;
@@ -188,11 +188,11 @@ function toggleCam(){
 function loadCam(){
   var url = localStorage.getItem(CAM_KEY) || defaultCamUrl;
   document.getElementById('camUrl').value = url;
-  document.getElementById('camImg').src = url;
+  document.getElementById('camFrame').src = url;
 }
 function saveCamUrl(){
   var url = document.getElementById('camUrl').value.trim();
-  if(url){ localStorage.setItem(CAM_KEY, url); document.getElementById('camImg').src = url; }
+  if(url){ localStorage.setItem(CAM_KEY, url); document.getElementById('camFrame').src = url; }
 }
 
 fetchStatus();
